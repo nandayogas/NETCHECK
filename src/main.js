@@ -22,13 +22,14 @@ const TYPE = { wifi: 'WiFi', cellular: 'Data seluler', none: 'Tidak terhubung', 
 const page = (body, back = true) => (back ? `<button class="btn ghost" id="back">Kembali</button>` : '') + `<section class="view">${body}</section>`;
 const view = () => document.getElementById('v');
 
-async function route() {
+async function route(animate = true) {
   clearInterval(timer);
   const p = location.hash.slice(1) || 'home';
   if (p !== 'home' && TOOLS.some(t => t[0] === p) && cfg.features[p] === false) return (location.hash = '');
   document.documentElement.style.setProperty('--accent', cfg.accent || '#2f9bff');
   const R = { home, ping: pingPg, diag: diagPg, speed: speedPg, ip: ipPg, monitor: monitorPg, device: devicePg, more: morePg }[p] || home;
   app.innerHTML = page('<div id="v"></div>', p !== 'home');
+  if (animate === false) app.querySelector('.view').style.animation = 'none';
   const b = $('#back'); if (b) b.onclick = () => (location.hash = '');
   R(view());
 }
@@ -131,8 +132,20 @@ async function devicePg(el) {
 function morePg(el) { renderMore(el, cfg.slots, esc); }
 
 function setOffline() { $('#offline').hidden = netStatus.connected; }
+const onHome = () => !location.hash || location.hash === '#home';
 Network.getStatus().then(s => { netStatus = s; setOffline(); });
-Network.addListener('networkStatusChange', s => { netStatus = s; setOffline(); if (!location.hash || location.hash === '#home') route(); });
-watchConfig(c => { cfg = c; route(); }, s => { server = s; if (!location.hash || location.hash === '#home') route(); });
-window.addEventListener('hashchange', route);
+Network.addListener('networkStatusChange', s => {
+  const changed = s.connected !== netStatus.connected || s.connectionType !== netStatus.connectionType;
+  netStatus = s; setOffline();
+  if (changed && onHome()) route(false);
+});
+let lastCfg = '';
+watchConfig(c => {
+  const j = JSON.stringify(c);
+  if (j === lastCfg) return;
+  lastCfg = j; cfg = c;
+  const p = location.hash.slice(1);
+  if (onHome() || cfg.features[p] === false || p === 'more') route(false);
+}, s => { if (s === server) return; server = s; if (onHome()) route(false); });
+window.addEventListener('hashchange', () => route());
 route();
