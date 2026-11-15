@@ -2,6 +2,7 @@ import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebas
 import { auth, configured } from './firebase.js';
 import { API, apiConfigured, fetchConfig, assetUrl } from './api.js';
 import { I, ICON_KEYS, iconFor, SOCIALS, wordmarkInner } from './ui.js';
+import { mountZipTools } from './admin-tools.js';
 
 const root = document.getElementById('admin');
 const $ = id => document.getElementById(id);
@@ -156,6 +157,9 @@ function render(msg = '') {
     <button class="btn" id="nt-add">Tambah tool</button>
   </div>
 
+  <h2>Tool dari ZIP</h2>
+  <div id="zt-root"></div>
+
   <h2>Slot Fitur Lainnya</h2>
   ${S.slots.map((s, i) => `<div class="panel" data-slot="${i}"><label class="row"><span>${esc(s.id)} tampil</span><input type="checkbox" class="v" ${s.visible ? 'checked' : ''} style="width:auto"></label>
   <input class="n" value="${esc(s.name)}" placeholder="Nama"><input class="d" value="${esc(s.desc)}" placeholder="Deskripsi"></div>`).join('')}
@@ -197,6 +201,7 @@ function bind() {
     try { await saveConfig(); render('Tersimpan. Aplikasi pengguna diperbarui dalam ±1 menit.'); }
     catch (e) { render('Gagal menyimpan: ' + e.message); }
   };
+  mountZipTools($('zt-root'));
 }
 
 async function addTool() {
