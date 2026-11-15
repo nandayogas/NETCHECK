@@ -1,8 +1,12 @@
 .gate { position: fixed; inset: 0; z-index: 999; display: flex; align-items: center; justify-content: center; background: #0a1020; padding: 24px; }
 .gate[hidden] { display: none; }
-.gate-card { width: 100%; max-width: 340px; text-align: center; display: flex; flex-direction: column; gap: 14px; }
+.gate-card { width: 100%; max-width: 340px; text-align: center; display: flex; flex-direction: column; gap: 12px; }
 .gate-logo { font-size: 30px; font-weight: 800; letter-spacing: 2px; color: #e8f0ff; }
+.gate input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.15); background: #0d1830; color: #e8f0ff; font: inherit; }
+.gate input[hidden] { display: none; }
 .gate .btn { width: 100%; }
+.gate .link { background: none; border: 0; color: var(--accent, #087CFF); font: inherit; cursor: pointer; padding: 6px; }
+.gate #gate-nama-wrap[hidden] { display: none; }
 .avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex: none; }
 .avatar.ph { display: inline-flex; align-items: center; justify-content: center; background: var(--accent, #087CFF); color: #fff; font-weight: 700; }
 .account { display: flex; align-items: center; gap: 12px; }

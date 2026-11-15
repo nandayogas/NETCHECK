@@ -6,6 +6,7 @@ import { renderMore } from './modules/more.js';
 import { I, logo, shell, tile, customTile, wordmarkInner, socialHtml } from './ui.js';
 import { wifiPg } from './wifi.js';
 import { accountHtml } from './auth.js';
+import { initGate } from './login.js';
 import './modules/live.js';
 
 const $ = s => document.querySelector(s);
@@ -37,6 +38,7 @@ const customHtml = () => customTools().map(t => customTile(t)).join('');
 
 // Kerangka aplikasi dibuat sekali: header, drawer, konten, bottom nav
 app.innerHTML = shell();
+initGate();
 
 // Judul (+ efek pelangi), background menu hamburger, dan sosial media mengikuti config admin
 function applyChrome() {
