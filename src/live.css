@@ -1,0 +1,6 @@
+.live-video { width: 100%; max-height: 60vh; background: #000; border-radius: 12px; aspect-ratio: 3 / 4; object-fit: cover; }
+.live-row { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; border-bottom: 1px solid rgba(255,255,255,.08); color: inherit; text-align: left; padding: 10px 0; cursor: pointer; font: inherit; }
+.live-row .lr-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.live-row .lr-txt b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-av { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: none; }
+.live-badge { background: #e5484d; color: #fff; border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700; letter-spacing: .5px; }
