@@ -1,13 +1,14 @@
 // Klien untuk API Cloudflare Worker (netcheck-api). Tidak memakai Firebase sama sekali,
 // jadi aplikasi pengguna tidak perlu SDK Firebase.
 
-export const API = 'https://netcheck-api.nandayoga711.workers.dev';
+// Isi dengan URL Worker dari `wrangler deploy`, tanpa garis miring di akhir.
+export const API = 'https://GANTI-netcheck-api.SUBDOMAIN.workers.dev';
 export const apiConfigured = !API.includes('GANTI');
 
 export const DEFAULTS = {
   title: 'NETCHECK',
   announcement: '',
-  accent: '#2f9bff',
+  accent: '#087CFF',
   features: { ping: true, diag: true, speed: true, ip: true, monitor: true, device: true },
   slots: Array.from({ length: 6 }, (_, i) => ({ id: 'slot' + (i + 1), visible: true, name: 'Fitur ' + (i + 1), desc: '' }))
 };

@@ -3,54 +3,89 @@ import { Device } from '@capacitor/device';
 import { watchConfig, DEFAULTS } from './api.js';
 import * as net from './modules/net.js';
 import { renderMore } from './modules/more.js';
+import { I, logo, shell, tile } from './ui.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const app = $('#app');
+const APP_VERSION = '1.0.0';
 let cfg = DEFAULTS, server = 'unconfigured', netStatus = { connected: navigator.onLine, connectionType: 'unknown' };
 let m = { ping: null, down: null, up: null }; // hanya hasil pengukuran nyata
 let timer = null;
 let ip = { v: null, t: 0 };
 
-const TOOLS = [
-  ['ping', 'Cek Ping', 'Ukur latensi'], ['diag', 'Cek Jaringan', 'Diagnostik koneksi'],
-  ['speed', 'Speed Test', 'Tes kecepatan'], ['ip', 'IP & DNS', 'Informasi IP dan DNS'],
-  ['monitor', 'Monitor', 'Pantau koneksi'], ['device', 'Perangkat', 'Informasi perangkat']
-];
 const SERVER_TXT = { server: ['Server terhubung', 'ok'], error: ['Server tidak terjangkau', 'bad'], unconfigured: ['API belum dikonfigurasi', 'bad'] };
 const TYPE = { wifi: 'WiFi', cellular: 'Data seluler', none: 'Tidak terhubung', unknown: 'Tidak diketahui' };
 
-const page = (body, back = true) => (back ? `<button class="btn ghost" id="back">Kembali</button>` : '') + `<section class="view">${body}</section>`;
-const view = () => document.getElementById('v');
+// Route yang punya halaman sendiri dan bisa dimatikan dari panel admin
+const FEATURE_ROUTES = ['ping', 'diag', 'speed', 'ip', 'monitor', 'device'];
+const enabled = k => cfg.features[k] !== false;
+
+// [kunci tool, segera hadir?]. Tool "segera" hanya tampilan, belum punya fungsi.
+const HOME_TOOLS = [['wifi', true], ['speed'], ['ip'], ['scan', true], ['security', true], ['ping']];
+const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi', true], ['scan', true], ['security', true]];
+const toolsHtml = list => list
+  .filter(([k, soon]) => soon || enabled(k))
+  .map(([k, soon]) => tile(k, !!soon)).join('');
+
+// Kerangka aplikasi dibuat sekali: header, drawer, konten, bottom nav
+app.innerHTML = shell();
+
+const setDrawer = open => {
+  $('#drawer').classList.toggle('open', open);
+  $('#drawer').setAttribute('aria-hidden', String(!open));
+  $('#ov').classList.toggle('show', open);
+};
+$('#menu').onclick = () => setDrawer(true);
+$('#close').onclick = () => setDrawer(false);
+$('#ov').onclick = () => setDrawer(false);
+
+// Semua tombol/kartu dengan data-go pindah halaman lewat hash
+document.addEventListener('click', e => {
+  const g = e.target.closest('[data-go]');
+  if (g && !g.disabled) location.hash = g.dataset.go;
+});
+
+const markNav = p => document.querySelectorAll('[data-route]').forEach(b => b.classList.toggle('active', b.dataset.route === p));
 
 async function route(animate = true) {
   clearInterval(timer);
+  setDrawer(false);
   const p = location.hash.slice(1) || 'home';
-  if (p !== 'home' && TOOLS.some(t => t[0] === p) && cfg.features[p] === false) return (location.hash = '');
-  document.documentElement.style.setProperty('--accent', cfg.accent || '#2f9bff');
-  const R = { home, ping: pingPg, diag: diagPg, speed: speedPg, ip: ipPg, monitor: monitorPg, device: devicePg, more: morePg }[p] || home;
-  app.innerHTML = page('<div id="v"></div>', p !== 'home');
-  if (animate === false) app.querySelector('.view').style.animation = 'none';
+  if (FEATURE_ROUTES.includes(p) && !enabled(p)) return (location.hash = '');
+  document.documentElement.style.setProperty('--accent', cfg.accent || '#087CFF');
+  const R = {
+    home, tools, history, settings, about, more: morePg,
+    ping: pingPg, diag: diagPg, speed: speedPg, ip: ipPg, monitor: monitorPg, device: devicePg,
+  }[p] || home;
+  $('#content').innerHTML = (p !== 'home' ? `<button class="back" id="back">${I.back}<span>Kembali</span></button>` : '')
+    + `<section class="view${animate ? '' : ' still'}" id="v"></section>`;
   const b = $('#back'); if (b) b.onclick = () => (location.hash = '');
-  R(view());
+  markNav(p);
+  R($('#v'));
 }
 
 function home(el) {
   const [st, cls] = SERVER_TXT[server];
-  const tools = TOOLS.filter(t => cfg.features[t[0]] !== false);
-  el.innerHTML = `<h1>${esc(cfg.title)}</h1>
+  const on = netStatus.connected;
+  el.innerHTML = `
   ${cfg.announcement ? `<div class="notice">${esc(cfg.announcement)}</div>` : ''}
-  <div class="panel"><span class="badge ${netStatus.connected ? 'ok' : 'bad'}">${netStatus.connected ? 'Terhubung' : 'Offline'}</span>
-    <div class="big">${netStatus.connected ? 'ONLINE' : 'OFFLINE'}</div>
-    <div class="mute">${TYPE[netStatus.connectionType] || netStatus.connectionType}</div>
-    <div class="stats"><div><span>Ping</span><strong>${m.ping == null ? '—' : m.ping.toFixed(0) + ' ms'}</strong></div>
-    <div><span>Download</span><strong>${m.down == null ? '—' : m.down.toFixed(1) + ' Mbps'}</strong></div>
-    <div><span>Upload</span><strong>${m.up == null ? '—' : m.up.toFixed(1) + ' Mbps'}</strong></div></div>
-    <p><button class="btn" id="measure">Ukur sekarang</button></p>
-    <span class="badge ${cls}">${st}</span><div id="ipline" class="mute" style="margin-top:8px;min-height:1.4em">${ip.v ? 'IP publik: ' + esc(ip.v) : ''}</div></div>
-  <h2>Tools jaringan</h2><div class="grid">${tools.map(t => `<button class="tile" data-go="${t[0]}"><b>${t[1]}</b><small>${t[2]}</small></button>`).join('')}
-  <button class="tile" data-go="more"><b>Fitur Lainnya</b><small>Slot pengembangan</small></button></div>`;
-  el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => (location.hash = b.dataset.go));
+  <section class="status ${on ? 'on' : 'off'}">
+    <div class="st-top"><span class="st-label">${I.signal}NETWORK STATUS</span><span>${TYPE[netStatus.connectionType] || netStatus.connectionType}</span></div>
+    <div class="st-main"><strong>${on ? 'Connected' : 'Disconnected'}</strong><span class="check">${on ? I.check : I.x}</span></div>
+    <small>${on ? 'Network running normally' : 'Tidak ada koneksi internet'}</small>
+    <div class="metrics">
+      <div><span>Ping</span><b>${m.ping == null ? '—' : m.ping.toFixed(0) + ' ms'}</b></div>
+      <div><span>Download</span><b>${m.down == null ? '—' : m.down.toFixed(1) + ' Mbps'}</b></div>
+      <div><span>Upload</span><b>${m.up == null ? '—' : m.up.toFixed(1) + ' Mbps'}</b></div>
+    </div>
+  </section>
+  <div class="row-actions"><button class="btn" id="measure">Ukur sekarang</button><span class="badge ${cls}">${st}</span></div>
+  <div id="ipline" class="mute small">${ip.v ? 'IP publik: ' + esc(ip.v) : ''}</div>
+  <div class="sec-head"><h2>Network Tools</h2><button class="link" data-go="tools">Lihat Semua${I.chevron}</button></div>
+  <div class="tools-grid">${toolsHtml(HOME_TOOLS)}</div>
+  <button class="more-card" data-go="more"><span class="more-ic">${I.grid}</span><span class="more-txt"><b>More Features</b><small>Fitur lainnya segera hadir...</small></span><span class="more-go">${I.chevron}</span></button>`;
+
   if (Date.now() - ip.t > 60000) {
     ip.t = Date.now();
     net.ipInfo().then(i => { ip.v = i.clientIp; const e = $('#ipline'); if (e) e.textContent = 'IP publik: ' + ip.v; }).catch(() => { ip.t = 0; });
@@ -61,6 +96,41 @@ function home(el) {
     catch (err) { alert('Pengukuran gagal: ' + err.message); }
     if (location.hash === '' || location.hash === '#home') home(el);
   };
+}
+
+function tools(el) {
+  el.innerHTML = `<h2 class="page-title">Semua Tools</h2><div class="tools-grid">${toolsHtml(ALL_TOOLS)}</div>`;
+}
+
+function history(el) {
+  const has = [m.ping, m.down, m.up].some(v => v != null);
+  el.innerHTML = `<h2 class="page-title">Riwayat</h2>` + (has
+    ? `<div class="panel">
+        <div class="row"><span class="mute">Ping</span><span>${m.ping == null ? '—' : m.ping.toFixed(0) + ' ms'}</span></div>
+        <div class="row"><span class="mute">Download</span><span>${m.down == null ? '—' : m.down.toFixed(1) + ' Mbps'}</span></div>
+        <div class="row"><span class="mute">Upload</span><span>${m.up == null ? '—' : m.up.toFixed(1) + ' Mbps'}</span></div>
+        <small class="mute">Hasil sesi ini. Riwayat hilang saat aplikasi ditutup.</small>
+      </div>`
+    : `<div class="empty">${I.clock}<p>Belum ada riwayat</p><small class="mute">Hasil pengukuran akan muncul di sini selama aplikasi dibuka.</small></div>`);
+}
+
+function settings(el) {
+  const rows = [
+    ['Status server', SERVER_TXT[server][0]],
+    ['Status jaringan', netStatus.connected ? 'Online' : 'Offline'],
+    ['Jenis koneksi', TYPE[netStatus.connectionType] || netStatus.connectionType],
+    ['Versi aplikasi', APP_VERSION],
+  ];
+  el.innerHTML = `<h2 class="page-title">Pengaturan</h2><div class="panel">${rows.map(r => `<div class="row"><span class="mute">${r[0]}</span><span>${esc(r[1])}</span></div>`).join('')}</div>`;
+}
+
+function about(el) {
+  el.innerHTML = `<div class="about">
+    <div class="about-logo">${logo(56)}</div>
+    <h2 class="page-title">${esc(cfg.title)}</h2>
+    <p class="mute">Versi ${APP_VERSION}</p>
+    <div class="panel"><p>Aplikasi cek jaringan untuk melihat ping, kecepatan, IP, dan DNS. Pengukuran memakai server Cloudflare speed test.</p></div>
+  </div>`;
 }
 
 function pingPg(el) {
@@ -160,7 +230,12 @@ async function devicePg(el) {
 
 function morePg(el) { renderMore(el, cfg.slots, esc); }
 
-function setOffline() { $('#offline').hidden = netStatus.connected; }
+// Header: pill ONLINE/OFFLINE, plus overlay offline seperti sebelumnya
+function setOffline() {
+  $('#offline').hidden = netStatus.connected;
+  $('#pill').classList.toggle('off', !netStatus.connected);
+  $('#pilltxt').textContent = netStatus.connected ? 'ONLINE' : 'OFFLINE';
+}
 const onHome = () => !location.hash || location.hash === '#home';
 let pending = false;
 const refresh = () => { if (pending) return; pending = true; setTimeout(() => { pending = false; route(false); }, 200); };
@@ -170,6 +245,7 @@ Network.addListener('networkStatusChange', s => {
   netStatus = s; setOffline();
   if (changed && onHome()) refresh();
 });
+setOffline();
 let lastCfg = '';
 watchConfig(c => {
   const j = JSON.stringify(c);
