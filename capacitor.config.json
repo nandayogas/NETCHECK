@@ -3,11 +3,5 @@
   "appName": "NETCHECK",
   "webDir": "dist",
   "backgroundColor": "#0a1020",
-  "android": { "allowMixedContent": false },
-  "plugins": {
-    "FirebaseAuthentication": {
-      "providers": ["google.com"],
-      "skipNativeAuth": false
-    }
-  }
+  "android": { "allowMixedContent": false }
 }
