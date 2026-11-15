@@ -1,0 +1,7 @@
+{
+  "appId": "com.netcheck.app",
+  "appName": "NETCHECK",
+  "webDir": "dist",
+  "backgroundColor": "#0a1020",
+  "android": { "allowMixedContent": false }
+}
