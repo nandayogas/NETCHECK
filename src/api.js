@@ -2,7 +2,7 @@
 // jadi aplikasi pengguna tidak perlu SDK Firebase.
 
 // Isi dengan URL Worker dari `wrangler deploy`, tanpa garis miring di akhir.
-export const API = 'https://GANTI-netcheck-api.SUBDOMAIN.workers.dev';
+export const API = 'https://netcheck-api.nandayoga711.workers.dev';
 export const apiConfigured = !API.includes('GANTI');
 
 export const DEFAULTS = {
