@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "837956250286",
+    "project_id": "netcheck-3ce9c",
+    "storage_bucket": "netcheck-3ce9c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:837956250286:android:85424c3bd56aef6ccbdb3f",
+        "android_client_info": {
+          "package_name": "com.netcheck.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGQCzuRi7Kz1anHXOPxtYnMa-hOuvu9SM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
