@@ -1,7 +1,7 @@
 // Fitur Lainnya: slot bawaan (REGISTRY) dan tool dari ZIP yang diupload admin (Firestore `tools`).
 import { getApp } from 'firebase/app';
 import { getFirestore, collection, query, where, onSnapshot } from 'firebase/firestore';
-import { I } from './ui.js';
+import { I } from '../ui.js';
 
 export const REGISTRY = {};
 // Tampilan khusus per slot: { icon: svg, cls: kelas tambahan }. Diisi oleh modul fitur.
