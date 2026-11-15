@@ -120,7 +120,7 @@ function toolPg(el, tool) {
     ? `<div class="panel"><p class="mute">Halaman ini dibuka di luar aplikasi.</p><a class="btn" href="${esc(tool.url)}" target="_blank" rel="noopener">Buka</a></div>`
     : `<div class="panel"><pre id="o">Memuat…</pre><iframe class="tool-frame" id="tf" title="${esc(tool.name)}" sandbox="allow-scripts allow-forms" hidden></iframe></div>`);
   if (tool.kind === 'html') {
-    fetch(`${API}/api/tool?src=${encodeURIComponent(tool.url)}`, { cache: 'no-store' })
+    fetch(`${API}${tool.url}`, { cache: 'no-store' })
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
       .then(t => {
         const f = $('#tf'); if (!f) return;
