@@ -140,4 +140,6 @@ pre{white-space:pre-wrap;word-break:break-word;margin:8px 0 0;font:inherit;font-
 @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{transition:none!important;animation:none!important}
-}
+}#admin{max-width:480px;margin:0 auto;padding:16px}
+#admin h1{font-size:24px;margin:8px 0 12px}
+
