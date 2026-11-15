@@ -4,6 +4,7 @@ import { watchConfig, DEFAULTS, API } from './api.js';
 import * as net from './modules/net.js';
 import { renderMore } from './modules/more.js';
 import { I, logo, shell, tile, customTile } from './ui.js';
+import { wifiPg } from './wifi.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -18,12 +19,12 @@ const SERVER_TXT = { server: ['Server terhubung', 'ok'], error: ['Server tidak t
 const TYPE = { wifi: 'WiFi', cellular: 'Data seluler', none: 'Tidak terhubung', unknown: 'Tidak diketahui' };
 
 // Route yang punya halaman sendiri dan bisa dimatikan dari panel admin
-const FEATURE_ROUTES = ['ping', 'diag', 'speed', 'ip', 'monitor', 'device'];
+const FEATURE_ROUTES = ['ping', 'diag', 'speed', 'ip', 'monitor', 'device', 'wifi'];
 const enabled = k => cfg.features[k] !== false;
 
 // [kunci tool, segera hadir?]. Tool "segera" hanya tampilan, belum punya fungsi.
-const HOME_TOOLS = [['wifi', true], ['speed'], ['ip'], ['scan', true], ['security', true], ['ping']];
-const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi', true], ['scan', true], ['security', true]];
+const HOME_TOOLS = [['wifi'], ['speed'], ['ip'], ['scan', true], ['security', true], ['ping']];
+const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi'], ['scan', true], ['security', true]];
 const toolsHtml = list => list
   .filter(([k, soon]) => soon || enabled(k))
   .map(([k, soon]) => tile(k, !!soon)).join('');
@@ -60,7 +61,7 @@ async function route(animate = true) {
   document.documentElement.style.setProperty('--accent', cfg.accent || '#087CFF');
 
   let R = {
-    home, tools, history, settings, about, more: morePg,
+    home, tools, history, settings, about, more: morePg, wifi: wifiPg,
     ping: pingPg, diag: diagPg, speed: speedPg, ip: ipPg, monitor: monitorPg, device: devicePg,
   }[p];
   if (!R && p.startsWith('t/')) {
