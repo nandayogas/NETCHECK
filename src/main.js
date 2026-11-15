@@ -6,11 +6,10 @@ import { renderMore } from './modules/more.js';
 import { I, logo, shell, tile, customTile, wordmarkInner, socialHtml } from './ui.js';
 import { wifiPg } from './wifi.js';
 import { accountHtml } from './auth.js';
-import { initGate } from './login.js';
 import './modules/live.js';
 
 const $ = s => document.querySelector(s);
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const esc = s => String(s ?? '').replace(/[&<>\"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[c]));
 const app = $('#app');
 const APP_VERSION = '1.0.0';
 let cfg = DEFAULTS, server = 'unconfigured', netStatus = { connected: navigator.onLine, connectionType: 'unknown' };
@@ -38,14 +37,13 @@ const customHtml = () => customTools().map(t => customTile(t)).join('');
 
 // Kerangka aplikasi dibuat sekali: header, drawer, konten, bottom nav
 app.innerHTML = shell();
-initGate();
 
 // Judul (+ efek pelangi), background menu hamburger, dan sosial media mengikuti config admin
 function applyChrome() {
   const t = cfg.title || 'NETCHECK';
   document.querySelectorAll('.wm').forEach(w => { w.innerHTML = wordmarkInner(t); w.classList.toggle('rainbow', !!cfg.titleRainbow); });
   document.title = t;
-  const bg = assetUrl(cfg.drawerBg).replace(/["\\\n\r]/g, '');
+  const bg = assetUrl(cfg.drawerBg).replace(/[\"\\\\\n\r]/g, '');
   const d = $('#drawer');
   d.classList.toggle('has-bg', !!bg);
   d.style.backgroundImage = bg ? `linear-gradient(rgba(5,13,28,.6),rgba(5,13,28,.9)), url("${bg}")` : '';
