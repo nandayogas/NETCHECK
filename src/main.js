@@ -5,6 +5,9 @@ import * as net from './modules/net.js';
 import { renderMore } from './modules/more.js';
 import { I, logo, shell, tile, customTile, wordmarkInner, socialHtml } from './ui.js';
 import { wifiPg } from './wifi.js';
+import { accountHtml } from './auth.js';
+import { initGate } from './login.js';
+import './modules/live.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -35,6 +38,7 @@ const customHtml = () => customTools().map(t => customTile(t)).join('');
 
 // Kerangka aplikasi dibuat sekali: header, drawer, konten, bottom nav
 app.innerHTML = shell();
+initGate();
 
 // Judul (+ efek pelangi), background menu hamburger, dan sosial media mengikuti config admin
 function applyChrome() {
@@ -164,7 +168,7 @@ function settings(el) {
     ['Jenis koneksi', TYPE[netStatus.connectionType] || netStatus.connectionType],
     ['Versi aplikasi', APP_VERSION],
   ];
-  el.innerHTML = `<h2 class="page-title">Pengaturan</h2><div class="panel">${rows.map(r => `<div class="row"><span class="mute">${r[0]}</span><span>${esc(r[1])}</span></div>`).join('')}</div>`;
+  el.innerHTML = `<h2 class="page-title">Pengaturan</h2>${accountHtml()}<div class="panel">${rows.map(r => `<div class="row"><span class="mute">${r[0]}</span><span>${esc(r[1])}</span></div>`).join('')}</div>`;
 }
 
 function about(el) {
