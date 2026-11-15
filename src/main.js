@@ -1,6 +1,6 @@
 import { Network } from '@capacitor/network';
 import { Device } from '@capacitor/device';
-import { watchConfig, DEFAULTS } from './firebase.js';
+import { watchConfig, DEFAULTS } from './api.js';
 import * as net from './modules/net.js';
 import { renderMore } from './modules/more.js';
 
@@ -17,7 +17,7 @@ const TOOLS = [
   ['speed', 'Speed Test', 'Tes kecepatan'], ['ip', 'IP & DNS', 'Informasi IP dan DNS'],
   ['monitor', 'Monitor', 'Pantau koneksi'], ['device', 'Perangkat', 'Informasi perangkat']
 ];
-const SERVER_TXT = { server: ['Server terhubung', 'ok'], cache: ['Server tidak terjangkau (data cache)', 'bad'], error: ['Server error / izin ditolak', 'bad'], unconfigured: ['Firebase belum dikonfigurasi', 'bad'] };
+const SERVER_TXT = { server: ['Server terhubung', 'ok'], error: ['Server tidak terjangkau', 'bad'], unconfigured: ['API belum dikonfigurasi', 'bad'] };
 const TYPE = { wifi: 'WiFi', cellular: 'Data seluler', none: 'Tidak terhubung', unknown: 'Tidak diketahui' };
 
 const page = (body, back = true) => (back ? `<button class="btn ghost" id="back">Kembali</button>` : '') + `<section class="view">${body}</section>`;
