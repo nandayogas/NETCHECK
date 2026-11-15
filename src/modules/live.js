@@ -5,7 +5,7 @@ import { getApp } from 'firebase/app';
 import { getFirestore, doc, collection, setDoc, updateDoc, deleteDoc, getDocs, addDoc,
   onSnapshot, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
 import { currentUser } from '../auth.js';
-import { REGISTRY } from './more.js';
+import { REGISTRY, SLOT_STYLE } from './more.js';
 import '../live.css';
 
 const SLOT = 'slot1';
@@ -314,3 +314,15 @@ window.addEventListener('hashchange', () => {
 });
 
 REGISTRY[SLOT] = liveHome;
+
+// Ikon siaran: lingkaran pusat dengan gelombang di kiri-kanan, gradien merah ke oranye
+SLOT_STYLE[SLOT] = {
+  cls: 'live-tile',
+  icon: `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" class="live-ic">
+    <defs><linearGradient id="nc-live-g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff4d6d"/><stop offset="1" stop-color="#ff8a00"/></linearGradient></defs>
+    <path d="M5.2 5.2Q1.2 12 5.2 18.8M18.8 5.2Q22.8 12 18.8 18.8" stroke="url(#nc-live-g)" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+    <path d="M8.4 8.4Q6 12 8.4 15.6M15.6 8.4Q18 12 15.6 15.6" stroke="url(#nc-live-g)" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="12" cy="12" r="2.8" fill="url(#nc-live-g)"/>
+  </svg>`,
+};
