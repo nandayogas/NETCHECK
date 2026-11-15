@@ -140,6 +140,15 @@ pre{white-space:pre-wrap;word-break:break-word;margin:8px 0 0;font:inherit;font-
 @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{transition:none!important;animation:none!important}
-}#admin{max-width:480px;margin:0 auto;padding:16px}
-#admin h1{font-size:24px;margin:8px 0 12px}
+}
 
+/* Panel admin */
+#admin{max-width:480px;margin:0 auto;padding:16px}
+#admin h1{font-size:24px;margin:8px 0 12px}
+#admin h3{font-size:15px;margin:0 0 10px}
+select{width:100%;background:var(--card-2);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:11px 12px;font:inherit;margin:4px 0 10px}
+.tool-name{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.small-btn{padding:6px 12px;font-size:12px}
+
+/* Tool HTML tambahan (dijalankan di sandbox) */
+.tool-frame{width:100%;height:70vh;border:0;border-radius:12px;background:#fff;margin-top:10px}

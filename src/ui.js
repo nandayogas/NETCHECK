@@ -94,3 +94,14 @@ export function tile(key, soon = false) {
     <span class="t-ic">${d.icon}</span><b>${d.name}</b>
   </button>`;
 }
+
+// Ikon yang bisa dipilih admin untuk tool tambahan
+export const ICON_KEYS = ['grid', 'pulse', 'speed', 'ip', 'monitor', 'device', 'wifi', 'scan', 'shield', 'diag', 'info', 'clock'];
+
+const escHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Kartu tool tambahan dari panel admin
+export function customTile(t) {
+  const icon = I[t.icon] || I.grid;
+  return `<button class="tile" data-go="t/${escHtml(t.id)}"><span class="t-ic">${icon}</span><b>${escHtml(t.name)}</b></button>`;
+}

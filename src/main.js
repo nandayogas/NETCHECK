@@ -3,7 +3,7 @@ import { Device } from '@capacitor/device';
 import { watchConfig, DEFAULTS } from './api.js';
 import * as net from './modules/net.js';
 import { renderMore } from './modules/more.js';
-import { I, logo, shell, tile } from './ui.js';
+import { I, logo, shell, tile, customTile } from './ui.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -27,6 +27,10 @@ const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'
 const toolsHtml = list => list
   .filter(([k, soon]) => soon || enabled(k))
   .map(([k, soon]) => tile(k, !!soon)).join('');
+
+// Tool tambahan dari panel admin (yang diaktifkan)
+const customTools = () => (cfg.tools || []).filter(t => t.enabled !== false);
+const customHtml = () => customTools().map(t => customTile(t)).join('');
 
 // Kerangka aplikasi dibuat sekali: header, drawer, konten, bottom nav
 app.innerHTML = shell();
@@ -54,10 +58,18 @@ async function route(animate = true) {
   const p = location.hash.slice(1) || 'home';
   if (FEATURE_ROUTES.includes(p) && !enabled(p)) return (location.hash = '');
   document.documentElement.style.setProperty('--accent', cfg.accent || '#087CFF');
-  const R = {
+
+  let R = {
     home, tools, history, settings, about, more: morePg,
     ping: pingPg, diag: diagPg, speed: speedPg, ip: ipPg, monitor: monitorPg, device: devicePg,
-  }[p] || home;
+  }[p];
+  if (!R && p.startsWith('t/')) {
+    const tool = customTools().find(t => t.id === p.slice(2));
+    if (!tool) return (location.hash = '');
+    R = el => toolPg(el, tool);
+  }
+  R = R || home;
+
   $('#content').innerHTML = (p !== 'home' ? `<button class="back" id="back">${I.back}<span>Kembali</span></button>` : '')
     + `<section class="view${animate ? '' : ' still'}" id="v"></section>`;
   const b = $('#back'); if (b) b.onclick = () => (location.hash = '');
@@ -83,7 +95,7 @@ function home(el) {
   <div class="row-actions"><button class="btn" id="measure">Ukur sekarang</button><span class="badge ${cls}">${st}</span></div>
   <div id="ipline" class="mute small">${ip.v ? 'IP publik: ' + esc(ip.v) : ''}</div>
   <div class="sec-head"><h2>Network Tools</h2><button class="link" data-go="tools">Lihat Semua${I.chevron}</button></div>
-  <div class="tools-grid">${toolsHtml(HOME_TOOLS)}</div>
+  <div class="tools-grid">${toolsHtml(HOME_TOOLS)}${customHtml()}</div>
   <button class="more-card" data-go="more"><span class="more-ic">${I.grid}</span><span class="more-txt"><b>More Features</b><small>Fitur lainnya segera hadir...</small></span><span class="more-go">${I.chevron}</span></button>`;
 
   if (Date.now() - ip.t > 60000) {
@@ -99,7 +111,24 @@ function home(el) {
 }
 
 function tools(el) {
-  el.innerHTML = `<h2 class="page-title">Semua Tools</h2><div class="tools-grid">${toolsHtml(ALL_TOOLS)}</div>`;
+  el.innerHTML = `<h2 class="page-title">Semua Tools</h2><div class="tools-grid">${toolsHtml(ALL_TOOLS)}${customHtml()}</div>`;
+}
+
+// Tool tambahan: "url" membuka tautan di luar aplikasi, "html" dijalankan di sandbox
+function toolPg(el, tool) {
+  el.innerHTML = `<h2 class="page-title">${esc(tool.name)}</h2>` + (tool.kind === 'url'
+    ? `<div class="panel"><p class="mute">Halaman ini dibuka di luar aplikasi.</p><a class="btn" href="${esc(tool.url)}" target="_blank" rel="noopener">Buka</a></div>`
+    : `<div class="panel"><pre id="o">Memuat…</pre><iframe class="tool-frame" id="tf" title="${esc(tool.name)}" sandbox="allow-scripts allow-forms" hidden></iframe></div>`);
+  if (tool.kind === 'html') {
+    fetch(tool.url, { cache: 'no-store' })
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(t => {
+        const f = $('#tf'); if (!f) return;
+        f.srcdoc = t; f.hidden = false;
+        const o = $('#o'); if (o) o.hidden = true;
+      })
+      .catch(err => { const o = $('#o'); if (o) o.textContent = 'Gagal memuat tool: ' + err.message; });
+  }
 }
 
 function history(el) {

@@ -9,7 +9,8 @@ export const DEFAULTS = {
   title: 'NETCHECK',
   announcement: '',
   accent: '#087CFF',
-  features: { ping: true, diag: true, speed: true, ip: true, monitor: true, device: true },
+  features: { ping: true, diag: true, speed: true, ip: true, monitor: true, device: true, wifi: true, scan: true, security: true },
+  tools: [],
   slots: Array.from({ length: 6 }, (_, i) => ({ id: 'slot' + (i + 1), visible: true, name: 'Fitur ' + (i + 1), desc: '' }))
 };
 
