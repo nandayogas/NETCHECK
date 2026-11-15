@@ -11,10 +11,20 @@ export const DEFAULTS = {
   accent: '#087CFF',
   features: { ping: true, diag: true, speed: true, ip: true, monitor: true, device: true, wifi: true, scan: true, security: true },
   tools: [],
+  titleRainbow: false,
+  drawerBg: '',
+  social: {},
   slots: Array.from({ length: 6 }, (_, i) => ({ id: 'slot' + (i + 1), visible: true, name: 'Fitur ' + (i + 1), desc: '' }))
 };
 
-const merge = d => ({ ...DEFAULTS, ...d, features: { ...DEFAULTS.features, ...(d && d.features) }, slots: (d && d.slots) || DEFAULTS.slots });
+const merge = d => ({ ...DEFAULTS, ...d, features: { ...DEFAULTS.features, ...(d && d.features) }, slots: (d && d.slots) || DEFAULTS.slots, social: { ...(d && d.social) } });
+
+// Alamat gambar dari config: path relatif Worker (/...), https, atau data URL gambar. Selain itu ditolak.
+export const assetUrl = u => {
+  u = String(u || '');
+  if (u.startsWith('/') && !u.startsWith('//')) return API + u;
+  return /^(https:\/\/|data:image\/)/.test(u) ? u : '';
+};
 
 export async function fetchConfig() {
   const r = await fetch(`${API}/api/config`, { cache: 'no-store' });

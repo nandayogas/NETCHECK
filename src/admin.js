@@ -1,7 +1,7 @@
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth, configured } from './firebase.js';
-import { API, apiConfigured, fetchConfig } from './api.js';
-import { ICON_KEYS } from './ui.js';
+import { API, apiConfigured, fetchConfig, assetUrl } from './api.js';
+import { I, ICON_KEYS, iconFor, SOCIALS, wordmarkInner } from './ui.js';
 
 const root = document.getElementById('admin');
 const $ = id => document.getElementById(id);
@@ -40,6 +40,45 @@ async function uploadFile(file) {
   return j.url;
 }
 
+// Perkecil gambar dari galeri supaya ringan sebelum diupload
+function compressImage(file, maxW = 720, maxH = 1440, q = 0.8) {
+  return new Promise((res, rej) => {
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(u);
+      const k = Math.min(1, maxW / img.width, maxH / img.height);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => (b ? res(b) : rej(new Error('Gagal memproses gambar'))), 'image/jpeg', q);
+    };
+    img.onerror = () => { URL.revokeObjectURL(u); rej(new Error('File bukan gambar yang valid')); };
+    img.src = u;
+  });
+}
+const toDataUrl = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('Gagal membaca gambar')); r.readAsDataURL(blob); });
+const canLoad = src => new Promise(ok => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = src; });
+
+// Upload background menu. Coba lewat /api/upload dan pastikan gambarnya benar-benar tampil;
+// kalau tidak bisa, simpan versi kecil langsung di config (tanpa mengubah Worker/database).
+async function setDrawerBg(file) {
+  collect();
+  $('o').textContent = 'Memproses gambar…';
+  try {
+    let url = '';
+    try {
+      const u = await uploadFile(new File([await compressImage(file)], 'menu-bg.jpg', { type: 'image/jpeg' }));
+      if (await canLoad(assetUrl(u))) url = u;
+    } catch { /* lanjut ke cadangan */ }
+    if (!url) {
+      url = await toDataUrl(await compressImage(file, 480, 960, 0.6));
+      if (url.length > 150000) throw new Error('Gambar terlalu besar, pilih gambar lain.');
+    }
+    S.drawerBg = url;
+    render('Background menu diganti. Tekan Simpan perubahan untuk menerapkan.');
+  } catch (e) { render('Gagal: ' + e.message); }
+}
+
 function login(msg = '') {
   root.innerHTML = `<h1>NETCHECK Admin</h1><div class="panel"><input id="e" type="email" placeholder="Email"><input id="p" type="password" placeholder="Kata sandi"><button class="btn" id="go">Masuk</button><pre>${esc(msg)}</pre></div>`;
   $('go').onclick = async () => {
@@ -54,6 +93,8 @@ function collect() {
   S.title = $('title').value.trim() || 'NETCHECK';
   S.accent = $('accent').value;
   S.announcement = $('ann').value.trim();
+  S.titleRainbow = $('rb').checked;
+  S.social = Object.fromEntries(Object.keys(SOCIALS).map(k => [k, $('soc-' + k).value.trim()]));
   S.features = Object.fromEntries([...root.querySelectorAll('[data-f]')].map(x => [x.dataset.f, x.checked]));
   S.slots = [...root.querySelectorAll('[data-slot]')].map(p => ({
     id: S.slots[+p.dataset.slot].id,
@@ -75,8 +116,22 @@ function render(msg = '') {
   <h2>Tampilan & dashboard</h2>
   <div class="panel">
     <label>Judul dashboard</label><input id="title" value="${esc(S.title)}">
+    <label class="row"><span>Efek pelangi pada judul</span><input type="checkbox" id="rb" ${S.titleRainbow ? 'checked' : ''} style="width:auto"></label>
+    <div class="title-prev"><span class="wm${S.titleRainbow ? ' rainbow' : ''}" id="tprev">${wordmarkInner(S.title)}</span></div>
     <label>Warna aksen</label><input id="accent" type="color" value="${esc(S.accent)}">
     <label>Pengumuman (kosong = tidak tampil)</label><textarea id="ann" rows="3">${esc(S.announcement)}</textarea>
+  </div>
+
+  <h2>Background menu hamburger</h2>
+  <div class="panel">
+    <div class="bg-prev" id="bgprev" style="${assetUrl(S.drawerBg) ? `background-image:url('${esc(assetUrl(S.drawerBg))}')` : ''}">${assetUrl(S.drawerBg) ? '' : 'Belum ada background'}</div>
+    <input id="bg-file" type="file" accept="image/*">
+    <button class="btn ghost" id="bg-del" ${S.drawerBg ? '' : 'disabled'}>Hapus background</button>
+  </div>
+
+  <h2>Sosial media</h2>
+  <div class="panel">${Object.entries(SOCIALS).map(([k, [n]]) => `<label>${esc(n)}</label><input id="soc-${k}" value="${esc((S.social || {})[k] || '')}" placeholder="username atau https://..." autocapitalize="none">`).join('')}
+    <small class="mute">Tampil sebagai ikon di menu hamburger dan halaman Tentang. Kosong = tidak tampil.</small>
   </div>
 
   <h2>Tool bawaan</h2>
@@ -85,7 +140,7 @@ function render(msg = '') {
   <h2>Tool tambahan</h2>
   <div class="panel">${S.tools.length ? S.tools.map((t, i) => `
     <div class="row" data-tool="${i}">
-      <label class="tool-name"><input type="checkbox" class="tv" ${t.enabled !== false ? 'checked' : ''} style="width:auto"><span>${esc(t.name)}</span><small class="mute">${t.kind === 'url' ? 'tautan' : 'halaman HTML'}</small></label>
+      <label class="tool-name"><input type="checkbox" class="tv" ${t.enabled !== false ? 'checked' : ''} style="width:auto"><span class="icon-prev" style="width:32px;height:32px;margin:0">${I[t.icon] || I.grid}</span><span>${esc(t.name)}</span><small class="mute">${t.kind === 'url' ? 'tautan' : 'halaman HTML'}</small></label>
       <button class="btn ghost small-btn" data-del="${i}">Hapus</button>
     </div>`).join('') : '<p class="mute">Belum ada tool tambahan.</p>'}
   </div>
@@ -93,7 +148,8 @@ function render(msg = '') {
   <div class="panel">
     <h3>Tambah tool</h3>
     <input id="nt-name" placeholder="Nama tool">
-    <select id="nt-icon">${ICON_KEYS.map(k => `<option value="${k}">${k}</option>`).join('')}</select>
+    <div class="icon-row"><span class="icon-prev" id="nt-prev">${I.grid}</span><select id="nt-icon">${ICON_KEYS.map(k => `<option value="${k}">${k}</option>`).join('')}</select></div>
+    <small class="mute">Ikon dipilih otomatis dari judul. Anda tetap bisa menggantinya manual.</small>
     <select id="nt-kind"><option value="html">Upload file HTML</option><option value="url">Tautan (URL)</option></select>
     <div id="nt-html"><input id="nt-file" type="file" accept=".html,text/html"></div>
     <div id="nt-url" hidden><input id="nt-link" placeholder="https://..."></div>
@@ -122,6 +178,20 @@ function bind() {
     render('Tool dihapus. Tekan Simpan perubahan untuk menerapkan.');
   });
   $('nt-add').onclick = addTool;
+
+  // Judul: pratinjau langsung
+  const prevTitle = () => { const w = $('tprev'); w.innerHTML = wordmarkInner($('title').value.trim() || 'NETCHECK'); w.classList.toggle('rainbow', $('rb').checked); };
+  $('title').oninput = prevTitle; $('rb').onchange = prevTitle;
+
+  // Background menu dari galeri
+  $('bg-file').onchange = () => { const f = $('bg-file').files[0]; if (f) setDrawerBg(f); };
+  $('bg-del').onclick = () => { collect(); S.drawerBg = ''; render('Background dihapus. Tekan Simpan perubahan untuk menerapkan.'); };
+
+  // Ikon tool otomatis berganti saat mengetik judul (berhenti kalau ikon dipilih manual)
+  let manual = false;
+  const setIcon = k => { $('nt-icon').value = k; $('nt-prev').innerHTML = I[k] || I.grid; };
+  $('nt-name').oninput = () => { if (!manual) setIcon(iconFor($('nt-name').value)); };
+  $('nt-icon').onchange = () => { manual = true; setIcon($('nt-icon').value); };
   $('save').onclick = async () => {
     collect();
     try { await saveConfig(); render('Tersimpan. Aplikasi pengguna diperbarui dalam ±1 menit.'); }

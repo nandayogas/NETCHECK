@@ -22,7 +22,7 @@ html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI"
 .icon-btn{width:42px;height:42px;flex:none;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);display:grid;place-items:center;cursor:pointer;transition:border-color .2s}
 .icon-btn:hover{border-color:var(--neon)}
 .brand{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
-.wm{font-weight:700;font-size:19px;letter-spacing:.6px}
+.wm{font-weight:700;font-size:19px;letter-spacing:.6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .wm b{color:var(--neon);font-weight:700}
 .pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:99px;border:1px solid var(--online);color:var(--online);font-size:12px;font-weight:700;letter-spacing:.6px;background:rgba(0,229,139,.08);transition:color .3s,border-color .3s}
 .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--online);box-shadow:0 0 8px var(--online);animation:blink 2s ease-in-out infinite}
@@ -152,3 +152,27 @@ select{width:100%;background:var(--card-2);border:1px solid var(--line);border-r
 
 /* Tool HTML tambahan (dijalankan di sandbox) */
 .tool-frame{width:100%;height:70vh;border:0;border-radius:12px;background:#fff;margin-top:10px}
+
+/* Efek pelangi pada judul */
+.wm.rainbow,.wm.rainbow b{background:linear-gradient(90deg,#ff3b30,#ff9500,#ffcc00,#34c759,#00c7ff,#5856d6,#af52de,#ff3b30);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:rb 4s linear infinite}
+@keyframes rb{to{background-position:200% 0}}
+@media (prefers-reduced-motion:reduce){.wm.rainbow,.wm.rainbow b{animation:none}}
+
+/* Background menu hamburger */
+.drawer.has-bg{background-size:cover;background-position:center;background-repeat:no-repeat}
+
+/* Sosial media */
+.drawer-social,.about-social{display:flex;flex-wrap:wrap;gap:10px}
+.drawer-social{margin-top:auto;padding-top:16px}
+.drawer-social:empty,.about-social:empty{display:none}
+.about-social{justify-content:center;margin-top:6px}
+.soc{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(11,29,56,.7);color:var(--neon);display:grid;place-items:center;transition:border-color .2s,transform .15s}
+.soc:hover{border-color:var(--neon)}
+.soc:active{transform:scale(.94)}
+
+/* Admin: pratinjau */
+.bg-prev{height:150px;border-radius:14px;border:1px dashed var(--line);background:var(--card-2) center/cover no-repeat;display:grid;place-items:center;color:var(--sub);font-size:13px;margin:6px 0 10px}
+.title-prev{padding:10px 12px;border-radius:12px;background:var(--card-2);margin:4px 0 10px}
+.icon-row{display:flex;align-items:center;gap:10px}
+.icon-row select{margin:4px 0 10px;flex:1}
+.icon-prev{width:42px;height:42px;flex:none;border-radius:14px;display:grid;place-items:center;color:var(--neon);background:rgba(0,191,255,.1);margin-bottom:6px}

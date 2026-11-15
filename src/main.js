@@ -1,9 +1,9 @@
 import { Network } from '@capacitor/network';
 import { Device } from '@capacitor/device';
-import { watchConfig, DEFAULTS, API } from './api.js';
+import { watchConfig, DEFAULTS, API, assetUrl } from './api.js';
 import * as net from './modules/net.js';
 import { renderMore } from './modules/more.js';
-import { I, logo, shell, tile, customTile } from './ui.js';
+import { I, logo, shell, tile, customTile, wordmarkInner, socialHtml } from './ui.js';
 import { wifiPg } from './wifi.js';
 
 const $ = s => document.querySelector(s);
@@ -35,6 +35,19 @@ const customHtml = () => customTools().map(t => customTile(t)).join('');
 
 // Kerangka aplikasi dibuat sekali: header, drawer, konten, bottom nav
 app.innerHTML = shell();
+
+// Judul (+ efek pelangi), background menu hamburger, dan sosial media mengikuti config admin
+function applyChrome() {
+  const t = cfg.title || 'NETCHECK';
+  document.querySelectorAll('.wm').forEach(w => { w.innerHTML = wordmarkInner(t); w.classList.toggle('rainbow', !!cfg.titleRainbow); });
+  document.title = t;
+  const bg = assetUrl(cfg.drawerBg).replace(/["\\\n\r]/g, '');
+  const d = $('#drawer');
+  d.classList.toggle('has-bg', !!bg);
+  d.style.backgroundImage = bg ? `linear-gradient(rgba(5,13,28,.6),rgba(5,13,28,.9)), url("${bg}")` : '';
+  $('#dsocial').innerHTML = socialHtml(cfg.social);
+}
+applyChrome();
 
 const setDrawer = open => {
   $('#drawer').classList.toggle('open', open);
@@ -160,6 +173,7 @@ function about(el) {
     <h2 class="page-title">${esc(cfg.title)}</h2>
     <p class="mute">Versi ${APP_VERSION}</p>
     <div class="panel"><p>Aplikasi cek jaringan untuk melihat ping, kecepatan, IP, dan DNS. Pengukuran memakai server Cloudflare speed test.</p></div>
+    <div class="about-social">${socialHtml(cfg.social)}</div>
   </div>`;
 }
 
@@ -281,6 +295,7 @@ watchConfig(c => {
   const j = JSON.stringify(c);
   if (j === lastCfg) return;
   lastCfg = j; cfg = c;
+  applyChrome();
   const p = location.hash.slice(1);
   if (onHome() || cfg.features[p] === false || p === 'more') refresh();
 }, s => { if (s === server) return; server = s; if (onHome()) refresh(); });
