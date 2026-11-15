@@ -15,9 +15,14 @@ jobs:
       - name: Tambah izin Android
         run: |
           M=android/app/src/main/AndroidManifest.xml
-          for p in INTERNET ACCESS_NETWORK_STATE ACCESS_WIFI_STATE; do
+          for p in INTERNET ACCESS_NETWORK_STATE ACCESS_WIFI_STATE CHANGE_WIFI_STATE ACCESS_FINE_LOCATION; do
             grep -q "$p" $M || sed -i "s#<application#<uses-permission android:name=\"android.permission.$p\"/>\n    <application#" $M
           done
+      - name: Pasang plugin native WiFi
+        run: |
+          D=android/app/src/main/java/com/netcheck/app
+          mkdir -p $D
+          cp android-native/*.java $D/
       - run: npx cap sync android
       - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
