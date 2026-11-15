@@ -4,5 +4,18 @@ service cloud.firestore {
     function isAdmin() { return request.auth != null && exists(/databases/$(db)/documents/admins/$(request.auth.uid)); }
     match /config/app { allow read: if true; allow write: if isAdmin(); }
     match /admins/{uid} { allow read: if request.auth != null && request.auth.uid == uid; allow write: if false; }
+
+    // Live Streaming: sinyal sementara saja, tidak ada rekaman. Hanya user login.
+    match /live/{hostId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null && request.auth.uid == hostId;
+      match /viewers/{vid} {
+        allow read: if request.auth != null;
+        allow create, update, delete: if request.auth != null && (request.auth.uid == vid || request.auth.uid == hostId);
+        match /{sub}/{cid} {
+          allow read, write: if request.auth != null && (request.auth.uid == vid || request.auth.uid == hostId);
+        }
+      }
+    }
   }
 }

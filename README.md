@@ -43,3 +43,10 @@ Buat modul baru, daftarkan di `REGISTRY` pada `src/modules/more.js` dengan kunci
 3. Tab **Actions** > **Build APK** > **Run workflow**. Tunggu ±5-10 menit, buka run yang selesai, unduh artifact `netcheck-apk` (zip berisi `app-debug.apk`).
 4. Admin: **Settings > Pages > Source: GitHub Actions**, lalu Actions > **Deploy Admin** > Run workflow. Alamat: `https://USERNAME.github.io/NAMA-REPO/admin.html`.
 5. Firebase Console > Authentication > Settings > **Authorized domains** > tambahkan `USERNAME.github.io`.
+
+## 6. Login Google & Live Streaming
+- **Login Google:** di Firebase Console > Authentication > Sign-in method, aktifkan **Google**. Tambahkan aplikasi Android (package `com.netcheck.app`), unduh `google-services.json` dan letakkan di root repo. Tambahkan SHA-1 keystore debug (lihat langkah di bawah) di pengaturan aplikasi Android.
+- **SHA-1 tetap:** di komputer, jalankan `keytool -genkey -v -keystore netcheck-debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"`, lalu `keytool -list -v -keystore netcheck-debug.keystore -storepass android` untuk melihat SHA-1. Commit `netcheck-debug.keystore` ke repo.
+- **Live Streaming:** ada di slot 1 "Fitur Lainnya". Ubah nama slot 1 menjadi "Live Streaming" di panel admin.
+- **Aturan Firestore:** tempel ulang `firestore.rules` di tab Rules (aturan lama tetap, ditambah blok `live`).
+- Sinyal WebRTC memakai STUN Google. Koneksi antarjaringan (mis. 4G ke WiFi) bisa gagal di beberapa operator tanpa server TURN.
