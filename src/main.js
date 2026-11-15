@@ -10,6 +10,7 @@ const app = $('#app');
 let cfg = DEFAULTS, server = 'unconfigured', netStatus = { connected: navigator.onLine, connectionType: 'unknown' };
 let m = { ping: null, down: null, up: null }; // hanya hasil pengukuran nyata
 let timer = null;
+let ip = { v: null, t: 0 };
 
 const TOOLS = [
   ['ping', 'Cek Ping', 'Ukur latensi'], ['diag', 'Cek Jaringan', 'Diagnostik koneksi'],
@@ -46,11 +47,14 @@ function home(el) {
     <div><span>Download</span><strong>${m.down == null ? '—' : m.down.toFixed(1) + ' Mbps'}</strong></div>
     <div><span>Upload</span><strong>${m.up == null ? '—' : m.up.toFixed(1) + ' Mbps'}</strong></div></div>
     <p><button class="btn" id="measure">Ukur sekarang</button></p>
-    <span class="badge ${cls}">${st}</span><div id="ipline" class="mute" style="margin-top:8px"></div></div>
+    <span class="badge ${cls}">${st}</span><div id="ipline" class="mute" style="margin-top:8px;min-height:1.4em">${ip.v ? 'IP publik: ' + esc(ip.v) : ''}</div></div>
   <h2>Tools jaringan</h2><div class="grid">${tools.map(t => `<button class="tile" data-go="${t[0]}"><b>${t[1]}</b><small>${t[2]}</small></button>`).join('')}
   <button class="tile" data-go="more"><b>Fitur Lainnya</b><small>Slot pengembangan</small></button></div>`;
   el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => (location.hash = b.dataset.go));
-  net.ipInfo().then(i => { const e = $('#ipline'); if (e) e.textContent = 'IP publik: ' + i.clientIp; }).catch(() => {});
+  if (Date.now() - ip.t > 60000) {
+    ip.t = Date.now();
+    net.ipInfo().then(i => { ip.v = i.clientIp; const e = $('#ipline'); if (e) e.textContent = 'IP publik: ' + ip.v; }).catch(() => { ip.t = 0; });
+  }
   $('#measure').onclick = async e => {
     e.target.disabled = true; e.target.textContent = 'Mengukur…';
     try { m.ping = (await net.ping(5)).avg; m.down = await net.download(); m.up = await net.upload(); }
@@ -60,13 +64,38 @@ function home(el) {
 }
 
 function pingPg(el) {
-  el.innerHTML = `<h2>Cek Ping</h2><div class="panel"><button class="btn" id="go">Mulai (10 paket)</button><pre id="o"></pre></div>`;
-  $('#go').onclick = async e => {
-    e.target.disabled = true; $('#o').textContent = 'Mengukur…';
-    try { const r = await net.ping(10); m.ping = r.avg;
-      $('#o').textContent = `Rata-rata ${r.avg.toFixed(1)} ms\nMin ${r.min.toFixed(1)} ms / Maks ${r.max.toFixed(1)} ms\nJitter ${r.jitter.toFixed(1)} ms\nPacket loss ${r.loss.toFixed(0)}%\nCatatan: waktu respons HTTPS ke server Cloudflare, bukan ICMP.`;
-    } catch (err) { $('#o').textContent = 'Gagal: ' + err.message; }
-    e.target.disabled = false;
+  let sent = 0, fail = 0, vals = [], busy = false, running = false;
+  el.innerHTML = `<h2>Cek Ping</h2><div class="panel"><button class="btn" id="go">Mulai</button>
+  <div class="stats"><div><span>Saat ini</span><strong id="cur">—</strong></div><div><span>Rata-rata</span><strong id="avg">—</strong></div><div><span>Packet loss</span><strong id="loss">—</strong></div></div>
+  <div class="bars" id="bars"></div>
+  <pre id="o">Ping otomatis tiap 1 detik sampai Anda menekan Berhenti. Yang diukur adalah waktu respons HTTPS ke server Cloudflare, bukan ICMP.</pre></div>`;
+  const draw = () => {
+    if (!$('#cur')) return;
+    const ok = vals.filter(v => v != null);
+    const last = vals.at(-1);
+    $('#cur').textContent = last != null ? last.toFixed(0) + ' ms' : 'gagal';
+    $('#loss').textContent = ((fail / sent) * 100).toFixed(0) + '%';
+    if (ok.length) {
+      const avg = ok.reduce((a, c) => a + c) / ok.length;
+      const jit = ok.length > 1 ? ok.slice(1).reduce((a, v, i) => a + Math.abs(v - ok[i]), 0) / (ok.length - 1) : 0;
+      m.ping = avg;
+      $('#avg').textContent = avg.toFixed(0) + ' ms';
+      $('#o').textContent = `Dikirim: ${sent} | Gagal: ${fail}\nMin ${Math.min(...ok).toFixed(0)} ms / Maks ${Math.max(...ok).toFixed(0)} ms\nJitter ${jit.toFixed(1)} ms`;
+    }
+    const shown = vals.slice(-40), mx = Math.max(100, ...shown.filter(Boolean));
+    $('#bars').innerHTML = shown.map(v => `<i style="height:${v ? (v / mx) * 100 : 2}%;${v ? '' : 'background:var(--bad)'}"></i>`).join('');
+  };
+  const tick = async () => {
+    if (busy || !running) return;
+    busy = true; sent++;
+    try { vals.push((await net.ping(1)).avg); } catch { fail++; vals.push(null); }
+    if (vals.length > 300) vals.shift();
+    busy = false; draw();
+  };
+  $('#go').onclick = e => {
+    if (running) { running = false; clearInterval(timer); e.target.textContent = 'Mulai'; return; }
+    sent = 0; fail = 0; vals = []; running = true; e.target.textContent = 'Berhenti';
+    tick(); timer = setInterval(tick, 1000);
   };
 }
 
@@ -133,11 +162,13 @@ function morePg(el) { renderMore(el, cfg.slots, esc); }
 
 function setOffline() { $('#offline').hidden = netStatus.connected; }
 const onHome = () => !location.hash || location.hash === '#home';
+let pending = false;
+const refresh = () => { if (pending) return; pending = true; setTimeout(() => { pending = false; route(false); }, 200); };
 Network.getStatus().then(s => { netStatus = s; setOffline(); });
 Network.addListener('networkStatusChange', s => {
   const changed = s.connected !== netStatus.connected || s.connectionType !== netStatus.connectionType;
   netStatus = s; setOffline();
-  if (changed && onHome()) route(false);
+  if (changed && onHome()) refresh();
 });
 let lastCfg = '';
 watchConfig(c => {
@@ -145,7 +176,7 @@ watchConfig(c => {
   if (j === lastCfg) return;
   lastCfg = j; cfg = c;
   const p = location.hash.slice(1);
-  if (onHome() || cfg.features[p] === false || p === 'more') route(false);
-}, s => { if (s === server) return; server = s; if (onHome()) route(false); });
+  if (onHome() || cfg.features[p] === false || p === 'more') refresh();
+}, s => { if (s === server) return; server = s; if (onHome()) refresh(); });
 window.addEventListener('hashchange', () => route());
 route();
