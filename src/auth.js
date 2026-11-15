@@ -1,10 +1,6 @@
-// Login Google (Firebase Authentication). Modul terpisah dari logika aplikasi lama.
-// Di browser memakai popup; di Android memakai plugin native @capacitor-firebase/authentication
-// lalu menukar credential-nya ke Firebase Auth web SDK. Sesi disimpan otomatis (IndexedDB).
-import { onAuthStateChanged, signInWithPopup, signInWithCredential, signOut as fbSignOut,
-  GoogleAuthProvider, setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth';
-import { Capacitor } from '@capacitor/core';
-import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+// Versi tes: tanpa plugin login native. Login Google hanya lewat popup (browser).
+import { onAuthStateChanged, signInWithPopup, signOut as fbSignOut, GoogleAuthProvider,
+  setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth';
 import { auth } from './firebase.js';
 
 let user = undefined; // undefined = masih memeriksa sesi, null = belum login
@@ -28,22 +24,13 @@ provider.setCustomParameters({ prompt: 'select_account' });
 
 export async function loginGoogle() {
   if (!auth) throw new Error('Firebase belum dikonfigurasi');
-  if (Capacitor.isNativePlatform()) {
-    const res = await FirebaseAuthentication.signInWithGoogle();
-    const c = res && res.credential;
-    if (!c || !c.idToken) throw new Error('Login Google dibatalkan');
-    await signInWithCredential(auth, GoogleAuthProvider.credential(c.idToken, c.accessToken));
-  } else {
-    await signInWithPopup(auth, provider);
-  }
+  await signInWithPopup(auth, provider);
 }
 
 export async function logout() {
-  if (Capacitor.isNativePlatform()) await FirebaseAuthentication.signOut().catch(() => {});
   if (auth) await fbSignOut(auth);
 }
 
-// Kartu akun (nama, email, foto) untuk halaman Pengaturan
 export function accountHtml() {
   const u = user;
   if (!u) return '';
