@@ -3,7 +3,7 @@
 // Data sesi dihapus saat siaran berakhir. Mesh: penyiar membuat satu koneksi per penonton.
 import { getApp } from 'firebase/app';
 import { getFirestore, doc, collection, setDoc, updateDoc, deleteDoc, getDocs, addDoc,
-  onSnapshot, serverTimestamp } from 'firebase/firestore';
+  onSnapshot, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
 import { currentUser } from '../auth.js';
 import { REGISTRY } from './more.js';
 import '../live.css';
@@ -35,6 +35,8 @@ async function clearViewer(vref) {
 async function cleanupRoom(hid) {
   const vs = await getDocs(collection(fs(), 'live', hid, 'viewers'));
   for (const v of vs.docs) await clearViewer(v.ref);
+  const cs = await getDocs(collection(fs(), 'live', hid, 'comments'));
+  await Promise.all(cs.docs.map(x => deleteDoc(x.ref)));
   await deleteDoc(doc(fs(), 'live', hid));
 }
 
@@ -95,6 +97,7 @@ async function startHost(title) {
 
   s.stop = async () => {
     clearInterval(beat);
+    if (s.commentsUnsub) s.commentsUnsub();
     vUnsub();
     [...peers.keys()].forEach(closePeer);
     stream.getTracks().forEach(t => t.stop());
@@ -111,7 +114,7 @@ async function startWatch(hid, hostData) {
   const pc = new RTCPeerConnection(RTC);
   const pending = [];
   let remoteSet = false, settingRemote = false;
-  const s = { type: 'watch', host: hostData, remote: null, ended: false, stopped: false,
+  const s = { type: 'watch', hid, host: hostData, remote: null, ended: false, stopped: false,
     count: 0, setCount: null, onTrack: null, onEnd: null, stop: null, hostSeen: Date.now() };
 
   const addIce = c => { if (remoteSet) pc.addIceCandidate(c).catch(() => {}); else pending.push(c); };
@@ -157,6 +160,7 @@ async function startWatch(hid, hostData) {
   s.stop = async () => {
     if (s.stopped) return;
     s.stopped = true;
+    if (s.commentsUnsub) s.commentsUnsub();
     clearInterval(beat); clearInterval(watchdog);
     unsubs.forEach(u => u());
     pc.close();
@@ -164,6 +168,47 @@ async function startWatch(hid, hostData) {
     await clearViewer(vref).catch(() => {});
   };
   return s;
+}
+
+// ---------- KOMENTAR ----------
+const COMMENT_MAX = 200;
+function commentsHtml() {
+  return `<h2>Komentar</h2><div class="panel">
+    <div id="live-comments" class="live-comments"><span class="mute">Memuat komentar…</span></div>
+    <div class="live-send"><input id="live-msg" maxlength="${COMMENT_MAX}" placeholder="Tulis komentar…" autocomplete="off"><button class="btn" id="live-send">Kirim</button></div>
+  </div>`;
+}
+
+// Komentar disimpan di live/{hid}/comments dan dihapus saat siaran berakhir
+function attachComments(s, hid) {
+  if (s.commentsUnsub) s.commentsUnsub();
+  const q = query(collection(fs(), 'live', hid, 'comments'), orderBy('createdAt', 'desc'), limit(50));
+  s.commentsUnsub = onSnapshot(q, sn => {
+    const box = $('live-comments');
+    if (!box) return;
+    const items = sn.docs.map(x => x.data()).reverse();
+    box.innerHTML = items.length
+      ? items.map(c => `<div class="cmt"><b>${esc(c.name)}</b> <span>${esc(c.text)}</span></div>`).join('')
+      : `<span class="mute">Belum ada komentar.</span>`;
+    box.scrollTop = box.scrollHeight;
+  }, () => { const box = $('live-comments'); if (box) box.textContent = 'Gagal memuat komentar.'; });
+  $('live-send').onclick = () => postComment(hid);
+  $('live-msg').onkeydown = e => { if (e.key === 'Enter') postComment(hid); };
+}
+
+async function postComment(hid) {
+  const inp = $('live-msg');
+  const t = (inp.value || '').trim().slice(0, COMMENT_MAX);
+  if (!t) return;
+  const me = currentUser();
+  inp.value = '';
+  try {
+    await addDoc(collection(fs(), 'live', hid, 'comments'),
+      { uid: me.uid, name: me.name, text: t, createdAt: serverTimestamp() });
+  } catch (e) {
+    inp.value = t;
+    alert('Gagal mengirim komentar: ' + (e.message || e));
+  }
 }
 
 // ---------- UI ----------
@@ -229,10 +274,11 @@ function showHost(el) {
     <video id="live-v" class="live-video" autoplay playsinline muted></video>
     <div class="row"><span class="mute">Judul</span><span>${esc(s.title)}</span></div>
     <div class="row"><span class="mute">Penonton</span><span id="live-count">${s.count}</span></div>
-    <button class="btn ghost" id="live-end">Akhiri siaran</button></div>`;
+    <button class="btn ghost" id="live-end">Akhiri siaran</button></div>${commentsHtml()}`;
   const v = $('live-v');
   v.muted = true;
   v.srcObject = s.stream;
+  attachComments(s, currentUser().uid);
   s.setCount = n => { const c = $('live-count'); if (c) c.textContent = n; };
   $('live-end').onclick = async () => {
     $('live-end').disabled = true;
@@ -250,8 +296,9 @@ function showWatch(el) {
     <div class="row"><span class="mute">Penyiar</span><span>${esc(h.hostName || '')}</span></div>
     <div class="row"><span class="mute">Penonton</span><span id="live-count">${s.count}</span></div>
     <small id="live-status" class="mute">${s.ended ? 'Siaran telah berakhir.' : 'Menghubungkan…'}</small>
-    <button class="btn ghost" id="live-leave">${s.ended ? 'Kembali' : 'Keluar siaran'}</button></div>`;
+    <button class="btn ghost" id="live-leave">${s.ended ? 'Kembali' : 'Keluar siaran'}</button></div>${commentsHtml()}`;
   if (s.remote) $('live-v').srcObject = s.remote;
+  attachComments(s, s.hid);
   s.setCount = n => { const c = $('live-count'); if (c) c.textContent = n; };
   s.onTrack = () => { const t = $('live-status'); if (t) t.textContent = 'Tersambung'; };
   s.onEnd = () => {
