@@ -1,11 +1,14 @@
-// Cek pembaruan: baca version.json publik, bandingkan dengan versi aplikasi, lalu arahkan ke link download.
-// Ganti USERNAME dan NAMA-REPO dengan alamat repo GitHub kamu (repo harus publik).
-export const UPDATE_JSON_URL = 'https://raw.githubusercontent.com/USERNAME/NAMA-REPO/main/version.json';
+Claude
 
+Update · JS
+// Cek pembaruan: baca version.json publik, bandingkan dengan versi aplikasi, lalu arahkan ke link download.
+// Alamat version.json di repo GitHub (repo harus publik, branch main).
+export const UPDATE_JSON_URL = 'https://raw.githubusercontent.com/nandayogas/NETCHECK/main/version.json';
+ 
 const num = v => String(v).split('.').map(n => parseInt(n, 10) || 0);
 const newer = (a, b) => { const x = num(a), y = num(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
+ 
 export async function checkUpdate(current) {
   if (/USERNAME|NAMA-REPO/.test(UPDATE_JSON_URL)) return; // belum diatur
   try {
@@ -26,3 +29,5 @@ export async function checkUpdate(current) {
     const no = d.querySelector('#upd-no'); if (no) no.onclick = () => d.remove();
   } catch { /* offline atau file belum ada: abaikan */ }
 }
+ 
+Claude selesai menulis balasan
