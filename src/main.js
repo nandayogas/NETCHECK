@@ -8,6 +8,9 @@ import { wifiPg } from './wifi.js';
 import { accountHtml } from './auth.js';
 import { initGate } from './login.js';
 import './modules/live.js';
+import { gauge, spark } from './charts.js';
+import { hist, addHist, clearHist } from './history.js';
+import { securityPg } from './security.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -17,17 +20,18 @@ let cfg = DEFAULTS, server = 'unconfigured', netStatus = { connected: navigator.
 let m = { ping: null, down: null, up: null }; // hanya hasil pengukuran nyata
 let timer = null;
 let ip = { v: null, t: 0 };
+const trend = []; // ping tiap pengukuran Home (sesi ini)
 
 const SERVER_TXT = { server: ['Server terhubung', 'ok'], error: ['Server tidak terjangkau', 'bad'], unconfigured: ['API belum dikonfigurasi', 'bad'] };
 const TYPE = { wifi: 'WiFi', cellular: 'Data seluler', none: 'Tidak terhubung', unknown: 'Tidak diketahui' };
 
 // Route yang punya halaman sendiri dan bisa dimatikan dari panel admin
-const FEATURE_ROUTES = ['ping', 'diag', 'speed', 'ip', 'monitor', 'device', 'wifi'];
+const FEATURE_ROUTES = ['ping', 'diag', 'speed', 'ip', 'monitor', 'device', 'wifi', 'security'];
 const enabled = k => cfg.features[k] !== false;
 
 // [kunci tool, segera hadir?]. Tool "segera" hanya tampilan, belum punya fungsi.
-const HOME_TOOLS = [['wifi'], ['speed'], ['ip'], ['scan', true], ['security', true], ['ping']];
-const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi'], ['scan', true], ['security', true]];
+const HOME_TOOLS = [['wifi'], ['speed'], ['ip'], ['scan', true], ['security'], ['ping']];
+const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi'], ['scan', true], ['security']];
 const toolsHtml = list => list
   .filter(([k, soon]) => soon || enabled(k))
   .map(([k, soon]) => tile(k, !!soon)).join('');
@@ -78,7 +82,7 @@ async function route(animate = true) {
   document.documentElement.style.setProperty('--accent', cfg.accent || '#087CFF');
 
   let R = {
-    home, tools, history, settings, about, more: morePg, wifi: wifiPg,
+    home, tools, history, settings, about, more: morePg, wifi: wifiPg, security: securityPg,
     ping: pingPg, diag: diagPg, speed: speedPg, ip: ipPg, monitor: monitorPg, device: devicePg,
   }[p];
   if (!R && p.startsWith('t/')) {
@@ -110,6 +114,7 @@ function home(el) {
       <div><span>Upload</span><b>${m.up == null ? '—' : m.up.toFixed(1) + ' Mbps'}</b></div>
     </div>
   </section>
+  <div class="panel trend"><span class="mute small">Ping tiap pengukuran (sesi ini)</span>${spark(trend)}</div>
   <div class="row-actions"><button class="btn" id="measure">Ukur sekarang</button><span class="badge ${cls}">${st}</span></div>
   <div id="ipline" class="mute small">${ip.v ? 'IP publik: ' + esc(ip.v) : ''}</div>
   <div class="sec-head"><h2>Network Tools</h2><button class="link" data-go="tools">Lihat Semua${I.chevron}</button></div>
@@ -122,7 +127,7 @@ function home(el) {
   }
   $('#measure').onclick = async e => {
     e.target.disabled = true; e.target.textContent = 'Mengukur…';
-    try { m.ping = (await net.ping(5)).avg; m.down = await net.download(); m.up = await net.upload(); }
+    try { m.ping = (await net.ping(5)).avg; trend.push(m.ping); m.down = await net.download(); m.up = await net.upload(); addHist({ k: 'speed', ping: m.ping, down: m.down, up: m.up }); }
     catch (err) { alert('Pengukuran gagal: ' + err.message); }
     if (location.hash === '' || location.hash === '#home') home(el);
   };
@@ -150,15 +155,14 @@ function toolPg(el, tool) {
 }
 
 function history(el) {
-  const has = [m.ping, m.down, m.up].some(v => v != null);
-  el.innerHTML = `<h2 class="page-title">Riwayat</h2>` + (has
-    ? `<div class="panel">
-        <div class="row"><span class="mute">Ping</span><span>${m.ping == null ? '—' : m.ping.toFixed(0) + ' ms'}</span></div>
-        <div class="row"><span class="mute">Download</span><span>${m.down == null ? '—' : m.down.toFixed(1) + ' Mbps'}</span></div>
-        <div class="row"><span class="mute">Upload</span><span>${m.up == null ? '—' : m.up.toFixed(1) + ' Mbps'}</span></div>
-        <small class="mute">Hasil sesi ini. Riwayat hilang saat aplikasi ditutup.</small>
-      </div>`
-    : `<div class="empty">${I.clock}<p>Belum ada riwayat</p><small class="mute">Hasil pengukuran akan muncul di sini selama aplikasi dibuka.</small></div>`);
+  const L = hist();
+  const line = h => h.k === 'speed' ? ['Speed Test', `${h.down.toFixed(1)} / ${h.up.toFixed(1)} Mbps · ${h.ping.toFixed(0)} ms`, I.speed]
+    : h.k === 'ping' ? ['Ping Test', `${h.avg.toFixed(0)} ms · loss ${h.loss.toFixed(0)}%`, I.pulse]
+    : ['Security Check', `${h.ok}/${h.n} lolos`, I.shield];
+  el.innerHTML = `<div class="sec-head"><h2 class="page-title" style="margin:0">Riwayat Pengujian</h2>${L.length ? '<button class="link" id="hclr">Hapus semua</button>' : ''}</div>` + (L.length
+    ? L.map(h => { const [t, d, ic] = line(h); return `<div class="panel hist-item"><span class="t-ic">${ic}</span><div><b>${t}</b><div class="mute small">${esc(d)}</div></div><small class="mute">${new Date(h.t).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`; }).join('')
+    : `<div class="empty">${I.clock}<p>Belum ada riwayat</p><small class="mute">Hasil Speed Test, Ping, dan Security Check tersimpan di perangkat ini.</small></div>`);
+  const c = $('#hclr'); if (c) c.onclick = () => { clearHist(); history(el); };
 }
 
 function settings(el) {
@@ -185,7 +189,7 @@ function pingPg(el) {
   let sent = 0, fail = 0, vals = [], busy = false, running = false;
   el.innerHTML = `<h2>Cek Ping</h2><div class="panel"><button class="btn" id="go">Mulai</button>
   <div class="stats"><div><span>Saat ini</span><strong id="cur">—</strong></div><div><span>Rata-rata</span><strong id="avg">—</strong></div><div><span>Packet loss</span><strong id="loss">—</strong></div></div>
-  <div class="bars" id="bars"></div>
+  <div class="chart" id="bars"></div>
   <pre id="o">Ping otomatis tiap 1 detik sampai Anda menekan Berhenti. Yang diukur adalah waktu respons HTTPS ke server Cloudflare, bukan ICMP.</pre></div>`;
   const draw = () => {
     if (!$('#cur')) return;
@@ -201,7 +205,7 @@ function pingPg(el) {
       $('#o').textContent = `Dikirim: ${sent} | Gagal: ${fail}\nMin ${Math.min(...ok).toFixed(0)} ms / Maks ${Math.max(...ok).toFixed(0)} ms\nJitter ${jit.toFixed(1)} ms`;
     }
     const shown = vals.slice(-40), mx = Math.max(100, ...shown.filter(Boolean));
-    $('#bars').innerHTML = shown.map(v => `<i style="height:${v ? (v / mx) * 100 : 2}%;${v ? '' : 'background:var(--bad)'}"></i>`).join('');
+    $('#bars').innerHTML = spark(shown);
   };
   const tick = async () => {
     if (busy || !running) return;
@@ -211,7 +215,7 @@ function pingPg(el) {
     busy = false; draw();
   };
   $('#go').onclick = e => {
-    if (running) { running = false; clearInterval(timer); e.target.textContent = 'Mulai'; return; }
+    if (running) { running = false; clearInterval(timer); e.target.textContent = 'Mulai'; if (sent && m.ping != null) addHist({ k: 'ping', avg: m.ping, loss: (fail / sent) * 100 }); return; }
     sent = 0; fail = 0; vals = []; running = true; e.target.textContent = 'Berhenti';
     tick(); timer = setInterval(tick, 1000);
   };
@@ -227,14 +231,14 @@ function diagPg(el) {
 }
 
 function speedPg(el) {
-  el.innerHTML = `<h2>Speed Test</h2><div class="panel"><button class="btn" id="go">Mulai tes</button>
+  el.innerHTML = `<h2>Speed Test</h2><div class="panel"><div id="gg">${gauge(null, 100, 'Mbps')}</div><button class="btn" id="go">Mulai tes</button>
   <div class="stats"><div><span>Download</span><strong id="d">—</strong></div><div><span>Upload</span><strong id="u">—</strong></div><div><span>Ping</span><strong id="p">—</strong></div></div>
   <pre id="o">Tes memakai ±14 MB data. Hati-hati pada kuota seluler.</pre></div>`;
   $('#go').onclick = async e => {
     e.target.disabled = true; $('#o').textContent = 'Mengukur…';
     try { m.ping = (await net.ping(5)).avg; $('#p').textContent = m.ping.toFixed(0) + ' ms';
-      m.down = await net.download(); $('#d').textContent = m.down.toFixed(1) + ' Mbps';
-      m.up = await net.upload(); $('#u').textContent = m.up.toFixed(1) + ' Mbps'; $('#o').textContent = 'Selesai.';
+      m.down = await net.download(); $('#d').textContent = m.down.toFixed(1) + ' Mbps'; $('#gg').innerHTML = gauge(m.down, Math.max(100, Math.ceil(m.down / 100) * 100), 'Mbps');
+      m.up = await net.upload(); $('#u').textContent = m.up.toFixed(1) + ' Mbps'; $('#o').textContent = 'Selesai.'; addHist({ k: 'speed', ping: m.ping, down: m.down, up: m.up });
     } catch (err) { $('#o').textContent = 'Gagal: ' + err.message; }
     e.target.disabled = false;
   };
@@ -254,15 +258,15 @@ function ipPg(el) {
 }
 
 function monitorPg(el) {
-  const hist = [];
-  el.innerHTML = `<h2>Monitor Koneksi</h2><div class="panel"><button class="btn" id="go">Mulai</button><button class="btn ghost" id="stop">Berhenti</button><div class="bars" id="bars"></div><pre id="o">Ping tiap 3 detik.</pre></div>`;
+  const samples = [];
+  el.innerHTML = `<h2>Monitor Koneksi</h2><div class="panel"><button class="btn" id="go">Mulai</button><button class="btn ghost" id="stop">Berhenti</button><div class="chart" id="bars"></div><pre id="o">Ping tiap 3 detik.</pre></div>`;
   const tick = async () => {
-    try { hist.push((await net.ping(1)).avg); } catch { hist.push(null); }
-    if (hist.length > 30) hist.shift();
-    const mx = Math.max(100, ...hist.filter(Boolean));
+    try { samples.push((await net.ping(1)).avg); } catch { samples.push(null); }
+    if (samples.length > 30) samples.shift();
+    const mx = Math.max(100, ...samples.filter(Boolean));
     const b = $('#bars'); if (!b) return;
-    b.innerHTML = hist.map(v => `<i style="height:${v ? (v / mx) * 100 : 2}%;${v ? '' : 'background:var(--bad)'}"></i>`).join('');
-    const ok = hist.filter(Boolean); $('#o').textContent = `Terakhir: ${hist.at(-1) ? hist.at(-1).toFixed(0) + ' ms' : 'gagal'}\nRata-rata: ${ok.length ? (ok.reduce((a, c) => a + c) / ok.length).toFixed(0) : '—'} ms | Gagal: ${hist.length - ok.length}/${hist.length}`;
+    b.innerHTML = spark(samples);
+    const ok = samples.filter(Boolean); $('#o').textContent = `Terakhir: ${samples.at(-1) ? samples.at(-1).toFixed(0) + ' ms' : 'gagal'}\nRata-rata: ${ok.length ? (ok.reduce((a, c) => a + c) / ok.length).toFixed(0) : '—'} ms | Gagal: ${samples.length - ok.length}/${samples.length}`;
   };
   $('#go').onclick = () => { clearInterval(timer); tick(); timer = setInterval(tick, 3000); };
   $('#stop').onclick = () => clearInterval(timer);

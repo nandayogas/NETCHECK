@@ -176,3 +176,20 @@ select{width:100%;background:var(--card-2);border:1px solid var(--line);border-r
 .icon-row{display:flex;align-items:center;gap:10px}
 .icon-row select{margin:4px 0 10px;flex:1}
 .icon-prev{width:42px;height:42px;flex:none;border-radius:14px;display:grid;place-items:center;color:var(--neon);background:rgba(0,191,255,.1);margin-bottom:6px}
+
+/* Redesign: kartu statistik, grafik, gauge */
+.panel,.status{border-radius:20px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 24px rgba(0,0,0,.25)}
+.stats>div,.metrics>div{background:rgba(0,191,255,.06);border:1px solid var(--line);border-radius:14px;padding:10px}
+.metrics{border-top:0;gap:8px}
+.tile{border-radius:18px;background:linear-gradient(160deg,var(--card),#081830)}
+.btn{background:linear-gradient(90deg,var(--accent),#00B8FF);border-radius:14px;padding:13px 18px}
+.btn:focus-visible,.tile:focus-visible,.icon-btn:focus-visible{outline:2px solid var(--neon);outline-offset:2px}
+.gauge{width:100%;max-width:300px;display:block;margin:0 auto}
+.g-val{font-size:30px;font-weight:700;fill:#fff}.g-unit{font-size:12px;fill:var(--sub)}
+.chart,.trend{margin-top:10px}.spark{width:100%;height:110px;display:block}
+.chart-axis{display:flex;justify-content:space-between;font-size:11px;color:var(--sub)}
+.chart-empty{padding:26px 8px;text-align:center;color:var(--sub);font-size:13px;border:1px dashed var(--line);border-radius:14px}
+.shield-card{text-align:center}.shield-card h3{margin:6px 0 2px;font-size:22px}
+.shield-ic{width:84px;height:84px;margin:0 auto;border-radius:50%;display:grid;place-items:center;color:var(--online);background:rgba(0,229,139,.1);box-shadow:0 0 28px rgba(0,229,139,.25)}
+.shield-ic svg{width:44px;height:44px}.shield-ic.bad{color:var(--bad);background:rgba(255,92,122,.1);box-shadow:0 0 28px rgba(255,92,122,.25)}
+.hist-item{display:flex;align-items:center;gap:12px;padding:12px 14px}.hist-item>div{flex:1;min-width:0}

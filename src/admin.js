@@ -9,7 +9,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const FEATS = {
   ping: 'Cek Ping', diag: 'Cek Jaringan', speed: 'Speed Test', ip: 'IP & DNS', monitor: 'Monitor', device: 'Perangkat',
-  wifi: 'WiFi Analyzer (segera)', scan: 'Network Scanner (segera)', security: 'Security Check (segera)',
+  wifi: 'WiFi Analyzer (segera)', scan: 'Network Scanner (segera)', security: 'Security Check',
 };
 
 let S = null; // config yang sedang diedit; disimpan penuh saat tekan Simpan
