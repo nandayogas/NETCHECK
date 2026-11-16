@@ -10,8 +10,9 @@ import '../live.css';
 
 const SLOT = 'slot1';
 const RTC = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
-const BEAT = 20000;   // detak jantung tiap 20 detik
-const STALE = 60000;  // tanpa detak selama 60 detik = dianggap mati
+const BEAT = 60000;        // detak jantung tiap 60 detik (hemat kuota baca/tulis Firestore)
+const STALE = 150000;      // tanpa detak selama 150 detik = dianggap mati (harus > 2x BEAT)
+const MAX_VIEWERS = 8;     // batas penonton per siaran (mesh WebRTC: beban ada di HP penyiar)
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const $ = id => document.getElementById(id);
@@ -51,7 +52,7 @@ async function startHost(title) {
   try {
     await cleanupRoom(me.uid); // sisa sesi lama (mis. aplikasi ditutup paksa)
     await setDoc(ref, { hostUid: me.uid, hostName: me.name, hostPhoto: me.photo || '', title,
-      startedAt: serverTimestamp(), lastSeen: serverTimestamp() });
+      startedAt: serverTimestamp(), lastSeen: serverTimestamp(), count: 0 });
   } catch (e) { stream.getTracks().forEach(t => t.stop()); throw e; }
 
   const peers = new Map();
@@ -91,7 +92,12 @@ async function startHost(title) {
       if (c.type === 'added' && d.offer) answer(c.doc.id, d.offer);
       if (c.type === 'removed') closePeer(c.doc.id);
     });
-    s.count = sn.docs.filter(x => fresh(x.data())).length;
+    const n = sn.docs.filter(x => fresh(x.data())).length;
+    if (n !== s.count) {
+      s.count = n;
+      // Penonton membaca jumlah ini dari dokumen siaran, jadi tidak perlu memantau seluruh daftar penonton
+      updateDoc(ref, { count: n }).catch(() => {});
+    }
     if (s.setCount) s.setCount(s.count);
   }, () => {});
 
@@ -111,11 +117,17 @@ async function startWatch(hid, hostData) {
   const me = currentUser();
   const hostRef = doc(fs(), 'live', hid);
   const vref = doc(hostRef, 'viewers', me.uid);
+
+  // Batas penonton (dicek di aplikasi). Penonton lama yang sudah mati tidak dihitung.
+  const cur = await getDocs(collection(hostRef, 'viewers'));
+  const aktif = cur.docs.filter(x => x.id !== me.uid && fresh(x.data())).length;
+  if (aktif >= MAX_VIEWERS) throw new Error('Siaran penuh (maksimal ' + MAX_VIEWERS + ' penonton). Coba lagi nanti.');
+
   const pc = new RTCPeerConnection(RTC);
   const pending = [];
   let remoteSet = false, settingRemote = false;
   const s = { type: 'watch', hid, host: hostData, remote: null, ended: false, stopped: false,
-    count: 0, setCount: null, onTrack: null, onEnd: null, stop: null, hostSeen: Date.now() };
+    count: (hostData && hostData.count) || 0, setCount: null, onTrack: null, onEnd: null, stop: null, hostSeen: Date.now() };
 
   const addIce = c => { if (remoteSet) pc.addIceCandidate(c).catch(() => {}); else pending.push(c); };
   pc.ontrack = e => { s.remote = e.streams[0]; const v = $('live-v'); if (v) v.srcObject = s.remote; if (s.onTrack) s.onTrack(); };
@@ -148,9 +160,7 @@ async function startWatch(hid, hostData) {
     if (!sn.exists() || !fresh(sn.data())) return endNow();
     s.host = sn.data();
     s.hostSeen = Date.now();
-  }, () => {}));
-  unsubs.push(onSnapshot(collection(hostRef, 'viewers'), sn => {
-    s.count = sn.docs.filter(x => fresh(x.data())).length;
+    s.count = s.host.count || 0;
     if (s.setCount) s.setCount(s.count);
   }, () => {}));
 
@@ -240,7 +250,7 @@ function liveHome(el) {
       if (id === currentUser().uid) return alert('Ini siaran Anda. Buka "Akhiri siaran" untuk menghentikannya.');
       stopList();
       try { session = await startWatch(id, map.get(id)); showWatch(el); }
-      catch (e) { alert('Gagal masuk siaran: ' + (e.message || e)); }
+      catch (e) { alert('Gagal masuk siaran: ' + (e.message || e)); liveHome(el); }
     });
   }, () => { const box = $('live-list'); if (box) box.textContent = 'Gagal memuat daftar siaran.'; });
 }
