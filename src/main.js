@@ -8,6 +8,7 @@ import { wifiPg } from './wifi.js';
 import { accountHtml } from './auth.js';
 import { initGate } from './login.js';
 import './modules/live.js';
+import { checkUpdate } from './update.js';
 import { gauge, spark } from './charts.js';
 import { hist, addHist, clearHist } from './history.js';
 import { securityPg } from './security.js';
@@ -15,7 +16,7 @@ import { securityPg } from './security.js';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const app = $('#app');
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 let cfg = DEFAULTS, server = 'unconfigured', netStatus = { connected: navigator.onLine, connectionType: 'unknown' };
 let m = { ping: null, down: null, up: null }; // hanya hasil pengukuran nyata
 let timer = null;
@@ -324,3 +325,4 @@ watchConfig(c => {
 }, s => { if (s === server) return; server = s; if (onHome()) refresh(); });
 window.addEventListener('hashchange', () => route());
 route();
+checkUpdate(APP_VERSION);
