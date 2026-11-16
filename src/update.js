@@ -1,6 +1,6 @@
 // Cek pembaruan: baca version.json publik, bandingkan dengan versi aplikasi.
 // Jika wajib: true, aplikasi terkunci sampai pengguna memperbarui.
-export const UPDATE_JSON_URL = 'https://raw.githubusercontent.com/USERNAME/NAMA-REPO/main/version.json';
+export const UPDATE_JSON_URL = 'https://raw.githubusercontent.com/nandayogas/NETCHECK/main/version.json';
 
 const num = v => String(v).split('.').map(n => parseInt(n, 10) || 0);
 const newer = (a, b) => { const x = num(a), y = num(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
