@@ -20,6 +20,7 @@ let cfg = DEFAULTS, server = 'unconfigured', netStatus = { connected: navigator.
 let m = { ping: null, down: null, up: null }; // hanya hasil pengukuran nyata
 let timer = null;
 let ip = { v: null, t: 0 };
+let hf = 'all'; // filter riwayat
 const trend = []; // ping tiap pengukuran Home (sesi ini)
 
 const SERVER_TXT = { server: ['Server terhubung', 'ok'], error: ['Server tidak terjangkau', 'bad'], unconfigured: ['API belum dikonfigurasi', 'bad'] };
@@ -31,7 +32,7 @@ const enabled = k => cfg.features[k] !== false;
 
 // [kunci tool, segera hadir?]. Tool "segera" hanya tampilan, belum punya fungsi.
 const HOME_TOOLS = [['wifi'], ['speed'], ['ip'], ['scan', true], ['security'], ['ping']];
-const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi'], ['scan', true], ['security']];
+const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi'], ['scan', true], ['security'], ['ai', true]];
 const toolsHtml = list => list
   .filter(([k, soon]) => soon || enabled(k))
   .map(([k, soon]) => tile(k, !!soon)).join('');
@@ -114,7 +115,8 @@ function home(el) {
       <div><span>Upload</span><b>${m.up == null ? '—' : m.up.toFixed(1) + ' Mbps'}</b></div>
     </div>
   </section>
-  <div class="panel trend"><span class="mute small">Ping tiap pengukuran (sesi ini)</span>${spark(trend)}</div>
+  ${healthHtml(on)}
+  <div class="panel trend"><span class="mute small">Latency (ms) tiap pengukuran</span>${spark(trend)}</div>
   <div class="row-actions"><button class="btn" id="measure">Ukur sekarang</button><span class="badge ${cls}">${st}</span></div>
   <div id="ipline" class="mute small">${ip.v ? 'IP publik: ' + esc(ip.v) : ''}</div>
   <div class="sec-head"><h2>Network Tools</h2><button class="link" data-go="tools">Lihat Semua${I.chevron}</button></div>
@@ -154,14 +156,26 @@ function toolPg(el, tool) {
   }
 }
 
+function healthHtml(on) {
+  // Dihitung hanya dari pemeriksaan yang benar-benar ada datanya
+  const c = [['Perangkat online', on], ['Server terhubung', server === 'server']];
+  if (m.ping != null) c.push(['Ping di bawah 100 ms', m.ping < 100]);
+  if (m.down != null) c.push(['Download minimal 5 Mbps', m.down >= 5]);
+  const pct = Math.round(c.filter(x => x[1]).length / c.length * 100);
+  return `<div class="panel health"><div class="ring" style="--p:${pct}"><b>${pct}%</b></div><div><b>System Health</b>${c.map(([t, ok]) => `<div class="hrow ${ok ? 'ok' : 'bad'}">${ok ? I.check : I.x}<span>${t}</span></div>`).join('')}</div></div>`;
+}
+
 function history(el) {
-  const L = hist();
+  const L = hist().filter(h => hf === 'all' || h.k === hf);
   const line = h => h.k === 'speed' ? ['Speed Test', `${h.down.toFixed(1)} / ${h.up.toFixed(1)} Mbps · ${h.ping.toFixed(0)} ms`, I.speed]
     : h.k === 'ping' ? ['Ping Test', `${h.avg.toFixed(0)} ms · loss ${h.loss.toFixed(0)}%`, I.pulse]
     : ['Security Check', `${h.ok}/${h.n} lolos`, I.shield];
-  el.innerHTML = `<div class="sec-head"><h2 class="page-title" style="margin:0">Riwayat Pengujian</h2>${L.length ? '<button class="link" id="hclr">Hapus semua</button>' : ''}</div>` + (L.length
+  const tabs = [['all', 'Semua'], ['speed', 'Speed Test'], ['ping', 'Ping Test'], ['sec', 'Security']];
+  el.innerHTML = `<div class="sec-head"><h2 class="page-title" style="margin:0">Riwayat Pengujian</h2>${hist().length ? '<button class="link" id="hclr">Hapus semua</button>' : ''}</div>
+  <div class="tabs">${tabs.map(([k, l]) => `<button class="tab${hf === k ? ' on' : ''}" data-f="${k}">${l}</button>`).join('')}</div>` + (L.length
     ? L.map(h => { const [t, d, ic] = line(h); return `<div class="panel hist-item"><span class="t-ic">${ic}</span><div><b>${t}</b><div class="mute small">${esc(d)}</div></div><small class="mute">${new Date(h.t).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`; }).join('')
     : `<div class="empty">${I.clock}<p>Belum ada riwayat</p><small class="mute">Hasil Speed Test, Ping, dan Security Check tersimpan di perangkat ini.</small></div>`);
+  el.querySelectorAll('.tab').forEach(b => { b.onclick = () => { hf = b.dataset.f; history(el); }; });
   const c = $('#hclr'); if (c) c.onclick = () => { clearHist(); history(el); };
 }
 
@@ -188,20 +202,20 @@ function about(el) {
 function pingPg(el) {
   let sent = 0, fail = 0, vals = [], busy = false, running = false;
   el.innerHTML = `<h2>Cek Ping</h2><div class="panel"><button class="btn" id="go">Mulai</button>
-  <div class="stats"><div><span>Saat ini</span><strong id="cur">—</strong></div><div><span>Rata-rata</span><strong id="avg">—</strong></div><div><span>Packet loss</span><strong id="loss">—</strong></div></div>
+  <div class="stats"><div><span>Rata-rata</span><strong id="avg">—</strong></div><div><span>Min</span><strong id="min">—</strong></div><div><span>Maks</span><strong id="max">—</strong></div></div>
+  <div class="row"><span>Packet loss</span><strong id="loss">—</strong></div>
   <div class="chart" id="bars"></div>
   <pre id="o">Ping otomatis tiap 1 detik sampai Anda menekan Berhenti. Yang diukur adalah waktu respons HTTPS ke server Cloudflare, bukan ICMP.</pre></div>`;
   const draw = () => {
-    if (!$('#cur')) return;
+    if (!$('#avg')) return;
     const ok = vals.filter(v => v != null);
     const last = vals.at(-1);
-    $('#cur').textContent = last != null ? last.toFixed(0) + ' ms' : 'gagal';
     $('#loss').textContent = ((fail / sent) * 100).toFixed(0) + '%';
     if (ok.length) {
       const avg = ok.reduce((a, c) => a + c) / ok.length;
       const jit = ok.length > 1 ? ok.slice(1).reduce((a, v, i) => a + Math.abs(v - ok[i]), 0) / (ok.length - 1) : 0;
       m.ping = avg;
-      $('#avg').textContent = avg.toFixed(0) + ' ms';
+      $('#avg').textContent = avg.toFixed(0) + ' ms'; $('#min').textContent = Math.min(...ok).toFixed(0) + ' ms'; $('#max').textContent = Math.max(...ok).toFixed(0) + ' ms';
       $('#o').textContent = `Dikirim: ${sent} | Gagal: ${fail}\nMin ${Math.min(...ok).toFixed(0)} ms / Maks ${Math.max(...ok).toFixed(0)} ms\nJitter ${jit.toFixed(1)} ms`;
     }
     const shown = vals.slice(-40), mx = Math.max(100, ...shown.filter(Boolean));
@@ -245,9 +259,10 @@ function speedPg(el) {
 }
 
 function ipPg(el) {
-  el.innerHTML = `<h2>IP Address</h2><div class="panel" id="ipbox">Memuat…</div>
+  el.innerHTML = `<h2>IP Checker</h2><div class="panel ipcard"><svg class="globe" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" fill="none" stroke="#00BFFF" stroke-width="2"/><ellipse cx="60" cy="60" rx="22" ry="52" fill="none" stroke="#087CFF" stroke-width="1.5"/><path d="M8 60h104M16 36h88M16 84h88" fill="none" stroke="#087CFF" stroke-width="1.5"/></svg><span class="mute small">IP Publik</span><div class="ipbig"><b id="ipbig">Memuat…</b><button class="icon-btn" id="cp" aria-label="Salin IP">${I.link}</button></div></div><div class="panel" id="ipbox">Memuat…</div>
   <h2>DNS Lookup</h2><div class="panel"><input id="host" placeholder="contoh: example.com" autocapitalize="none"><button class="btn" id="go">Cari (A)</button><pre id="o"></pre></div>`;
-  net.ipInfo().then(i => { $('#ipbox').innerHTML = [['IP publik', i.clientIp], ['Operator', i.asOrganization], ['ASN', i.asn], ['Negara', i.country], ['Kota', i.city], ['Wilayah', i.region]].filter(r => r[1]).map(r => `<div class="row"><span class="mute">${r[0]}</span><span>${esc(r[1])}</span></div>`).join(''); })
+  net.ipInfo().then(i => { $('#ipbig').textContent = i.clientIp; $('#cp').onclick = () => navigator.clipboard && navigator.clipboard.writeText(i.clientIp).then(() => ($('#cp').style.color = 'var(--online)')).catch(() => {});
+    $('#ipbox').innerHTML = [['IP publik', i.clientIp], ['Operator', i.asOrganization], ['ASN', i.asn], ['Negara', i.country], ['Kota', i.city], ['Wilayah', i.region], ['Versi IP', String(i.clientIp).includes(':') ? 'IPv6' : 'IPv4']].filter(r => r[1]).map(r => `<div class="row"><span class="mute">${r[0]}</span><span>${esc(r[1])}</span></div>`).join(''); })
     .catch(err => ($('#ipbox').textContent = 'Gagal: ' + err.message));
   $('#go').onclick = async () => {
     const h = $('#host').value.trim(); if (!h) return ($('#o').textContent = 'Masukkan nama domain.');

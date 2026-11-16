@@ -1,3 +1,4 @@
+import { gauge } from './charts.js';
 // WiFi Analyzer: membaca info WiFi lewat plugin native "WifiInfo" (hanya di aplikasi Android).
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import * as net from './modules/net.js';
@@ -45,7 +46,7 @@ export function wifiPg(el) {
       if (!s.connected) { c.innerHTML = '<span class="mute">Tidak terhubung ke WiFi.</span>'; return; }
 
       const ssidOk = s.locationGranted && s.ssid && !/unknown/i.test(s.ssid);
-      c.innerHTML = [
+      c.innerHTML = [gauge(s.rssi + 100, 70, 'dBm', String(s.rssi)),
         row('Nama WiFi', ssidOk ? esc(s.ssid) : '<span class="mute">perlu izin lokasi</span>'),
         row('Alamat IP', esc(s.ip || '—')),
         row('Sinyal', `${s.rssi} dBm · ${quality(s.rssi)}`),

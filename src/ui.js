@@ -144,6 +144,7 @@ export const TOOL_DEFS = {
   wifi: { name: 'WiFi Analyzer', icon: I.wifi },
   scan: { name: 'Network Scanner', icon: I.scan },
   security: { name: 'Security Check', icon: I.shield },
+  ai: { name: 'AI Assistant', icon: I.chat },
 };
 
 export const DRAWER_ITEMS = [
