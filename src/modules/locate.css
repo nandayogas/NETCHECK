@@ -1,0 +1,203 @@
+/* Cari HP saya: tema Dark Neon Glassmorphism. Hanya menyasar .lc-page, halaman lain tidak terpengaruh. */
+
+.lc-page{
+  --lc-cyan:#00E5FF;
+  --lc-blue:#087CFF;
+  --lc-blue-2:#2F9BFF;
+  --lc-navy:#050D1C;
+  --lc-glass:linear-gradient(150deg,rgba(18,44,82,.62),rgba(7,20,42,.46));
+  --lc-edge:rgba(0,229,255,.22);
+  position:relative;isolation:isolate;overflow:hidden;
+  margin:0 -16px;padding:6px 16px 28px;min-height:calc(100dvh - 120px);
+  background:
+    radial-gradient(90% 46% at 50% -6%,rgba(8,124,255,.30),transparent 70%),
+    linear-gradient(180deg,#050D1C 0%,#071a36 55%,#050D1C 100%);
+  font-family:"Segoe UI",Roboto,system-ui,sans-serif;
+}
+
+/* Cahaya neon yang bergerak di latar */
+.lc-page::before,.lc-page::after{
+  content:"";position:absolute;z-index:-1;pointer-events:none;border-radius:50%;
+  filter:blur(60px);opacity:.55;will-change:transform;
+}
+.lc-page::before{width:260px;height:260px;left:-90px;top:120px;background:rgba(0,229,255,.22);animation:lcDrift 14s ease-in-out infinite}
+.lc-page::after{width:300px;height:300px;right:-120px;top:420px;background:rgba(8,124,255,.28);animation:lcDrift 18s ease-in-out infinite reverse}
+
+.lc-page h2.page-title{
+  margin:4px 0 14px;font-size:24px;font-weight:800;letter-spacing:.4px;
+  background:linear-gradient(90deg,#fff 10%,var(--lc-cyan) 90%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  text-shadow:0 0 22px rgba(0,229,255,.25);
+}
+
+/* ---------- Hero: radar + ilustrasi HP melayang ---------- */
+.lc-hero{
+  position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:18px 18px 16px;border-radius:24px;border:1px solid var(--lc-edge);
+  background:var(--lc-glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  box-shadow:0 0 30px rgba(0,229,255,.10),inset 0 1px 0 rgba(255,255,255,.07);
+  overflow:hidden;animation:lcIn .6s cubic-bezier(.2,.8,.2,1) both;
+}
+.lc-hero::after{ /* kilau neon yang melintas */
+  content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(110deg,transparent 35%,rgba(0,229,255,.18) 50%,transparent 65%);
+  background-size:260% 100%;animation:lcShine 5.5s ease-in-out infinite;
+}
+.lc-hero-txt{position:relative;z-index:1;min-width:0}
+.lc-kicker{display:inline-block;font-size:11px;font-weight:700;letter-spacing:1.6px;color:var(--lc-cyan);text-transform:uppercase;margin-bottom:6px}
+.lc-hero-txt p{margin:0;color:#9db4d6;font-size:13px;line-height:1.5}
+
+/* Radar */
+.lc-radar{
+  position:relative;flex:none;width:112px;height:112px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,229,255,.10) 0%,rgba(5,13,28,.6) 70%);
+  border:1px solid rgba(0,229,255,.35);box-shadow:0 0 22px rgba(0,229,255,.25),inset 0 0 18px rgba(0,229,255,.12);
+  overflow:hidden;
+}
+.lc-radar::before{ /* cincin konsentris */
+  content:"";position:absolute;inset:0;border-radius:50%;
+  background:
+    radial-gradient(circle,transparent 0 30%,rgba(0,229,255,.25) 30.5% 31%,transparent 31.5% 60%,rgba(0,229,255,.2) 60.5% 61%,transparent 61.5%),
+    linear-gradient(rgba(0,229,255,.18),rgba(0,229,255,.18)) center/1px 100% no-repeat,
+    linear-gradient(rgba(0,229,255,.18),rgba(0,229,255,.18)) center/100% 1px no-repeat;
+}
+.lc-sweep{
+  position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 0deg,rgba(0,229,255,0) 0deg,rgba(0,229,255,.55) 40deg,rgba(0,229,255,0) 70deg);
+  animation:lcSpin 2.6s linear infinite;
+}
+.lc-pin{
+  position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+  background:var(--lc-cyan);box-shadow:0 0 12px var(--lc-cyan);z-index:1;
+}
+.lc-pin::after{
+  content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--lc-cyan);
+  animation:lcPulse 2s ease-out infinite;
+}
+
+/* Ilustrasi HP melayang */
+.lc-phone{
+  position:absolute;right:-6px;bottom:-8px;width:44px;height:auto;opacity:.22;pointer-events:none;
+  animation:lcFloat 4.5s ease-in-out infinite;
+}
+
+/* ---------- Kartu kaca ---------- */
+.lc-card{
+  position:relative;margin-top:14px;padding:16px;border-radius:20px;
+  background:var(--lc-glass);border:1px solid var(--lc-edge);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  box-shadow:0 8px 28px rgba(0,0,0,.35),0 0 18px rgba(0,229,255,.08),inset 0 1px 0 rgba(255,255,255,.06);
+  animation:lcIn .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0) * 90ms + 120ms);
+}
+.lc-card h3{margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--lc-cyan);display:flex;align-items:center;gap:8px}
+.lc-card h3::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(0,229,255,.4),transparent)}
+
+/* Baris perangkat */
+.lc-item{
+  display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;
+  background:rgba(5,13,28,.45);border:1px solid rgba(145,168,199,.12);margin-top:8px;
+  transition:border-color .25s,box-shadow .25s,transform .2s;
+}
+.lc-item:hover{border-color:rgba(0,229,255,.35);box-shadow:0 0 16px rgba(0,229,255,.12)}
+.lc-ph{
+  flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:linear-gradient(135deg,rgba(8,124,255,.35),rgba(0,229,255,.15));border:1px solid rgba(0,229,255,.3);
+  color:var(--lc-cyan);
+}
+.lc-ph svg{width:20px;height:20px}
+.lc-info{flex:1;min-width:0}
+.lc-name{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lc-meta{color:#91A8C7;font-size:12px;line-height:1.45;margin-top:2px}
+.lc-live{display:inline-flex;align-items:center;gap:6px}
+.lc-live::before{content:"";width:7px;height:7px;border-radius:50%;background:#91A8C7}
+.lc-live.on::before{background:var(--online,#00E58B);box-shadow:0 0 8px #00E58B;animation:lcBlink 1.8s ease-in-out infinite}
+.lc-live.on{color:#7af5c4}
+.lc-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex:none}
+
+/* Tombol */
+.lc-btn{
+  position:relative;overflow:hidden;isolation:isolate;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border:0;border-radius:14px;padding:10px 16px;font:inherit;font-size:13px;font-weight:700;letter-spacing:.3px;color:#fff;
+  background:linear-gradient(95deg,var(--lc-blue) 0%,#00B8FF 100%);
+  box-shadow:0 0 18px rgba(8,124,255,.45),inset 0 1px 0 rgba(255,255,255,.25);
+  transition:transform .15s ease,box-shadow .25s ease,opacity .2s;
+}
+.lc-btn:hover{box-shadow:0 0 26px rgba(0,184,255,.6),inset 0 1px 0 rgba(255,255,255,.3)}
+.lc-btn:active{transform:scale(.97)}
+.lc-btn:disabled{opacity:.5;box-shadow:none;cursor:default}
+.lc-btn.ghost{
+  background:rgba(0,229,255,.06);color:var(--lc-cyan);border:1px solid rgba(0,229,255,.35);
+  box-shadow:0 0 12px rgba(0,229,255,.08);
+}
+.lc-btn.ghost:hover{box-shadow:0 0 18px rgba(0,229,255,.25);background:rgba(0,229,255,.12)}
+.lc-btn.danger{background:rgba(255,92,122,.08);color:#FF8CA0;border:1px solid rgba(255,92,122,.4);box-shadow:none}
+.lc-btn.block{width:100%;margin-top:12px;padding:13px 16px}
+.lc-btn.lc-small{padding:8px 11px;font-size:12px;border-radius:12px}
+.lc-ripple{
+  position:absolute;border-radius:50%;pointer-events:none;transform:scale(0);
+  background:radial-gradient(circle,rgba(255,255,255,.55) 0%,rgba(0,229,255,.18) 60%,transparent 70%);
+  animation:lcRipple .6s ease-out forwards;z-index:0;
+}
+
+/* Pilihan durasi */
+.lc-field{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 4px;color:#91A8C7;font-size:13px}
+.lc-select{
+  appearance:none;-webkit-appearance:none;cursor:pointer;
+  padding:9px 34px 9px 14px;border-radius:12px;color:#fff;font:inherit;font-size:13px;font-weight:600;
+  background:rgba(5,13,28,.7) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2300E5FF' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border:1px solid rgba(0,229,255,.3);outline:none;transition:border-color .2s,box-shadow .2s;
+}
+.lc-select:focus{border-color:var(--lc-cyan);box-shadow:0 0 14px rgba(0,229,255,.25)}
+.lc-select option{background:#0B1D38;color:#fff}
+
+/* Peta */
+.lc-map-wrap{margin-top:12px;border-radius:16px;overflow:hidden;border:1px solid rgba(0,229,255,.28);box-shadow:0 0 22px rgba(0,229,255,.14)}
+.lc-map-wrap #lc-map{height:300px}
+.lc-status-line{color:#7af5c4;font-size:13px;font-weight:600}
+.lc-note{color:#7d93b5;font-size:12px;line-height:1.5;margin:12px 2px 0}
+
+/* Loading */
+.lc-loading{display:flex;flex-direction:column;align-items:center;gap:14px;padding:34px 12px}
+.lc-loading .lc-radar{width:96px;height:96px}
+.lc-loading p{margin:0;color:#91A8C7;font-size:13px;letter-spacing:.4px}
+.lc-dots::after{content:"";animation:lcDots 1.4s steps(4,end) infinite}
+
+/* Success */
+.lc-success{
+  position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  background:rgba(5,13,28,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  animation:lcFadeIn .25s ease both;
+}
+.lc-success.out{animation:lcFadeOut .4s ease forwards}
+.lc-check{
+  width:84px;height:84px;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle,rgba(0,229,139,.25),rgba(0,229,139,.05) 70%);
+  border:2px solid #00E58B;box-shadow:0 0 28px rgba(0,229,139,.55);animation:lcPop .5s cubic-bezier(.2,1.4,.4,1) both;
+}
+.lc-check svg{width:44px;height:44px}
+.lc-check path{stroke:#00E58B;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:lcDraw .5s ease .25s forwards}
+.lc-success b{color:#fff;font-size:16px;letter-spacing:.3px}
+.lc-success small{color:#91A8C7;font-size:12px}
+
+.lc-empty{text-align:center;padding:14px 8px;color:#7d93b5;font-size:13px;margin:0}
+
+/* ---------- Animasi ---------- */
+@keyframes lcSpin{to{transform:rotate(360deg)}}
+@keyframes lcPulse{0%{transform:scale(.6);opacity:.9}100%{transform:scale(2.6);opacity:0}}
+@keyframes lcFloat{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-8px) rotate(4deg)}}
+@keyframes lcDrift{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,-24px)}}
+@keyframes lcShine{0%{background-position:120% 0}100%{background-position:-120% 0}}
+@keyframes lcIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes lcFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes lcFadeOut{to{opacity:0}}
+@keyframes lcBlink{50%{opacity:.35}}
+@keyframes lcRipple{to{transform:scale(1);opacity:0}}
+@keyframes lcPop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes lcDraw{to{stroke-dashoffset:0}}
+@keyframes lcDots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+
+@media (prefers-reduced-motion:reduce){
+  .lc-page *,.lc-page::before,.lc-page::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition:none !important}
+  .lc-sweep{animation:none}
+}
