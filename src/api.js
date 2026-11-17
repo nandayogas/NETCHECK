@@ -8,6 +8,11 @@ export const apiConfigured = !API.includes('GANTI');
 export const DEFAULTS = {
   title: 'NETCHECK',
   announcement: '',
+  maintenance: false,
+  maintenanceSchedule: { start: '', end: '', message: '' },
+  announcementLevel: 'info',
+  announcementUntil: '',
+  update: { version: '', url: '', notes: '', mandatory: false },
   accent: '#087CFF',
   features: { ping: true, diag: true, speed: true, ip: true, monitor: true, device: true, wifi: true, scan: true, security: true },
   tools: [],
@@ -17,7 +22,7 @@ export const DEFAULTS = {
   slots: Array.from({ length: 6 }, (_, i) => ({ id: 'slot' + (i + 1), visible: true, name: 'Fitur ' + (i + 1), desc: '' }))
 };
 
-const merge = d => ({ ...DEFAULTS, ...d, features: { ...DEFAULTS.features, ...(d && d.features) }, slots: (d && d.slots) || DEFAULTS.slots, social: { ...(d && d.social) } });
+const merge = d => ({ ...DEFAULTS, ...d, features: { ...DEFAULTS.features, ...(d && d.features) }, slots: (d && d.slots) || DEFAULTS.slots, social: { ...(d && d.social) }, update: { ...DEFAULTS.update, ...(d && d.update) }, maintenanceSchedule: { ...DEFAULTS.maintenanceSchedule, ...(d && d.maintenanceSchedule) } });
 
 // Alamat gambar dari config: path relatif Worker (/...), https, atau data URL gambar. Selain itu ditolak.
 export const assetUrl = u => {

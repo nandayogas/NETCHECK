@@ -44,3 +44,14 @@ function showUpdate(current, u) {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && lastCurrent) checkUpdate(lastCurrent);
 });
+
+// Pembaruan dari config Worker (panel dev). Dipanggil tiap config dimuat ulang.
+// Pembaruan wajib selalu muncul; pembaruan biasa hanya sekali per sesi per versi.
+let shownVersion = null;
+export function checkConfigUpdate(current, u) {
+  if (!u || !u.version || !/^https:\/\//.test(u.url || '') || !newer(u.version, current)) return;
+  const wajib = u.mandatory === true;
+  if (!wajib && shownVersion === u.version) return;
+  shownVersion = u.version;
+  showUpdate(current, { version: u.version, url: u.url, notes: u.notes, wajib });
+}

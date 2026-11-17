@@ -8,7 +8,7 @@ import { wifiPg } from './wifi.js';
 import { accountHtml } from './auth.js';
 import { initGate } from './login.js';
 import './modules/live.js';
-import { checkUpdate } from './update.js';
+import { checkUpdate, checkConfigUpdate } from './update.js';
 import { gauge, spark } from './charts.js';
 import { hist, addHist, clearHist } from './history.js';
 import { securityPg } from './security.js';
@@ -105,7 +105,7 @@ function home(el) {
   const [st, cls] = SERVER_TXT[server];
   const on = netStatus.connected;
   el.innerHTML = `
-  ${cfg.announcement ? `<div class="notice">${esc(cfg.announcement)}</div>` : ''}
+  ${annActive(cfg) ? `<div class="notice ${esc(cfg.announcementLevel || 'info')}">${esc(cfg.announcement)}</div>` : ''}
   <section class="status ${on ? 'on' : 'off'}">
     <div class="st-top"><span class="st-label">${I.signal}NETWORK STATUS</span><span>${TYPE[netStatus.connectionType] || netStatus.connectionType}</span></div>
     <div class="st-main"><strong>${on ? 'Connected' : 'Disconnected'}</strong><span class="check">${on ? I.check : I.x}</span></div>
@@ -314,12 +314,33 @@ Network.addListener('networkStatusChange', s => {
   if (changed && onHome()) refresh();
 });
 setOffline();
+// Mode maintenance dari panel dev: tutup seluruh aplikasi sampai dimatikan lagi
+const inRange = (s, e) => { const now = Date.now(); const st = s ? Date.parse(s) : NaN; const en = e ? Date.parse(e) : NaN; return !isNaN(st) && now >= st && (isNaN(en) || now < en); };
+const maintActive = c => !!c.maintenance || inRange(c.maintenanceSchedule && c.maintenanceSchedule.start, c.maintenanceSchedule && c.maintenanceSchedule.end);
+const annActive = c => !!c.announcement && (!c.announcementUntil || Date.now() < Date.parse(c.announcementUntil));
+function setMaintenance(on, msg) {
+  let el = $('#maint');
+  if (!on) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'maint';
+    el.className = 'maint-ov';
+    el.setAttribute('role', 'alertdialog');
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<div class="maint-card"><h2>Sedang Maintenance</h2><p>${esc(msg || 'Aplikasi sedang dalam perawatan. Silakan coba lagi beberapa saat lagi.')}</p></div>`;
+}
+// Cek jadwal tiap 30 detik, supaya maintenance terjadwal aktif tanpa menunggu config berubah
+setInterval(() => setMaintenance(maintActive(cfg), cfg.maintenanceSchedule && cfg.maintenanceSchedule.message), 30000);
+
 let lastCfg = '';
 watchConfig(c => {
   const j = JSON.stringify(c);
   if (j === lastCfg) return;
   lastCfg = j; cfg = c;
   applyChrome();
+  setMaintenance(maintActive(cfg), cfg.maintenanceSchedule && cfg.maintenanceSchedule.message);
+  checkConfigUpdate(APP_VERSION, cfg.update);
   const p = location.hash.slice(1);
   if (onHome() || cfg.features[p] === false || p === 'more') refresh();
 }, s => { if (s === server) return; server = s; if (onHome()) refresh(); });
