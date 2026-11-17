@@ -17,7 +17,7 @@ import { securityPg } from './security.js';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const app = $('#app');
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.4';
 let cfg = DEFAULTS, server = 'unconfigured', netStatus = { connected: navigator.onLine, connectionType: 'unknown' };
 let m = { ping: null, down: null, up: null }; // hanya hasil pengukuran nyata
 let timer = null;
