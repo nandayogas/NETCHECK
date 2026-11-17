@@ -13,6 +13,7 @@ import { checkUpdate, checkConfigUpdate } from './update.js';
 import { gauge, spark } from './charts.js';
 import { hist, addHist, clearHist } from './history.js';
 import { securityPg } from './security.js';
+import { initBg, bgSettingsHtml, bindBgSettings } from './bg.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -45,6 +46,7 @@ const customHtml = () => customTools().map(t => customTile(t)).join('');
 
 // Kerangka aplikasi dibuat sekali: header, drawer, konten, bottom nav
 app.innerHTML = shell();
+initBg();
 initGate();
 
 // Judul (+ efek pelangi), background menu hamburger, dan sosial media mengikuti config admin
@@ -143,9 +145,9 @@ function tools(el) {
 
 // Tool tambahan: "url" membuka tautan di luar aplikasi, "html" dijalankan di sandbox
 function toolPg(el, tool) {
-  el.innerHTML = (tool.kind === 'url'
-    ? `<h2 class="page-title">${esc(tool.name)}</h2><div class="panel"><p class="mute">Halaman ini dibuka di luar aplikasi.</p><a class="btn" href="${esc(tool.url)}" target="_blank" rel="noopener">Buka</a></div>`
-    : `<pre id="o" class="mute">Memuat…</pre><iframe class="tool-full" id="tf" title="${esc(tool.name)}" sandbox="allow-scripts allow-forms" hidden></iframe>`);
+  el.innerHTML = `<h2 class="page-title">${esc(tool.name)}</h2>` + (tool.kind === 'url'
+    ? `<div class="panel"><p class="mute">Halaman ini dibuka di luar aplikasi.</p><a class="btn" href="${esc(tool.url)}" target="_blank" rel="noopener">Buka</a></div>`
+    : `<div class="panel"><pre id="o">Memuat…</pre><iframe class="tool-frame" id="tf" title="${esc(tool.name)}" sandbox="allow-scripts allow-forms" hidden></iframe></div>`);
   if (tool.kind === 'html') {
     fetch(`${API}${tool.url}`, { cache: 'no-store' })
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
@@ -188,7 +190,8 @@ function settings(el) {
     ['Jenis koneksi', TYPE[netStatus.connectionType] || netStatus.connectionType],
     ['Versi aplikasi', APP_VERSION],
   ];
-  el.innerHTML = `<h2 class="page-title">Pengaturan</h2>${accountHtml()}<div class="panel">${rows.map(r => `<div class="row"><span class="mute">${r[0]}</span><span>${esc(r[1])}</span></div>`).join('')}</div>`;
+  el.innerHTML = `<h2 class="page-title">Pengaturan</h2>${accountHtml()}<div class="panel">${rows.map(r => `<div class="row"><span class="mute">${r[0]}</span><span>${esc(r[1])}</span></div>`).join('')}</div>${bgSettingsHtml()}`;
+  bindBgSettings(el);
 }
 
 function about(el) {
