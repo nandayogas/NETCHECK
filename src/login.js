@@ -1,6 +1,6 @@
 // Gerbang login: email + password. Pengguna baru bisa daftar dari layar yang sama.
 import './auth.css';
-import { onUser, loginEmail, daftarEmail, logout } from './auth.js';
+import { onUser, loginEmail, daftarEmail, logout, resetPassword } from './auth.js';
 
 const PESAN = {
   'auth/invalid-credential': 'Email atau password salah.',
@@ -27,6 +27,7 @@ export function initGate() {
     <input id="gate-pass" type="password" placeholder="Password (min. 6 karakter)" autocomplete="current-password">
     <button class="btn" id="gate-btn" disabled>Memeriksa login…</button>
     <button class="link" id="gate-toggle"></button>
+    <button class="link" id="gate-lupa">Lupa kata sandi?</button>
     <small id="gate-err" class="mute"></small></div>`;
   document.body.appendChild(g);
 
@@ -40,11 +41,29 @@ export function initGate() {
     $('gate-pass').autocomplete = daftar ? 'new-password' : 'current-password';
     btn.textContent = daftar ? 'Daftar' : 'Masuk';
     $('gate-toggle').textContent = daftar ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar';
+    $('gate-lupa').hidden = daftar;
     err.textContent = '';
   };
   render();
 
   $('gate-toggle').onclick = () => { mode = mode === 'daftar' ? 'masuk' : 'daftar'; render(); };
+
+  $('gate-lupa').onclick = async () => {
+    const email = $('gate-email').value.trim();
+    err.textContent = '';
+    if (!email) { err.textContent = 'Isi email Anda dulu, lalu tekan Lupa kata sandi lagi.'; return; }
+    $('gate-lupa').disabled = true;
+    try {
+      await resetPassword(email);
+      err.textContent = 'Jika email terdaftar, link reset sudah dikirim. Cek kotak masuk atau folder spam.';
+    } catch (e) {
+      const code = (e && e.code) || '';
+      err.textContent = code === 'auth/invalid-email' ? 'Format email tidak valid.'
+        : code === 'auth/network-request-failed' ? 'Tidak ada koneksi internet.'
+        : code === 'auth/too-many-requests' ? 'Terlalu banyak percobaan. Coba lagi nanti.'
+        : 'Gagal mengirim link reset: ' + ((e && e.message) || code);
+    } finally { $('gate-lupa').disabled = false; }
+  };
 
   btn.onclick = async () => {
     const email = $('gate-email').value.trim();

@@ -1,6 +1,6 @@
 // Login dan daftar pakai email + password (Firebase Authentication). Tanpa plugin native dan tanpa Google.
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile,
-  signOut as fbSignOut, setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth';
+  sendPasswordResetEmail, signOut as fbSignOut, setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth';
 import { auth } from './firebase.js';
 
 let user = undefined; // undefined = masih memeriksa sesi, null = belum login
@@ -30,6 +30,12 @@ export async function daftarEmail(nama, email, password) {
   if (nama) await updateProfile(c.user, { displayName: nama });
   user = toUser(auth.currentUser); // displayName baru tersimpan setelah update profil
   emit();
+}
+
+// Kirim link reset password ke email. Firebase tetap menjawab "terkirim" walau email tidak terdaftar, supaya tidak bisa ditebak.
+export async function resetPassword(email) {
+  if (!auth) throw new Error('Firebase belum dikonfigurasi');
+  await sendPasswordResetEmail(auth, email);
 }
 
 export async function logout() {
