@@ -8,6 +8,7 @@ import { wifiPg } from './wifi.js';
 import { accountHtml } from './auth.js';
 import { initGate } from './login.js';
 import './modules/live.js';
+import './modules/locate.js';
 import { checkUpdate, checkConfigUpdate } from './update.js';
 import { gauge, spark } from './charts.js';
 import { hist, addHist, clearHist } from './history.js';
