@@ -15,7 +15,7 @@ jobs:
       - name: Tambah izin Android
         run: |
           M=android/app/src/main/AndroidManifest.xml
-          for p in INTERNET ACCESS_NETWORK_STATE ACCESS_WIFI_STATE CHANGE_WIFI_STATE ACCESS_FINE_LOCATION CAMERA RECORD_AUDIO MODIFY_AUDIO_SETTINGS; do
+          for p in INTERNET ACCESS_NETWORK_STATE ACCESS_WIFI_STATE CHANGE_WIFI_STATE ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION POST_NOTIFICATIONS VIBRATE CAMERA RECORD_AUDIO MODIFY_AUDIO_SETTINGS; do
             grep -q "$p" $M || sed -i "s#<application#<uses-permission android:name=\"android.permission.$p\"/>\n    <application#" $M
           done
       - name: Pasang plugin native WiFi
