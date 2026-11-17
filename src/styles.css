@@ -223,3 +223,7 @@ body,#app{background:radial-gradient(120% 60% at 50% -10%,#0B2A5C 0,var(--bg) 60
 
 .notice.warn{border-color:#FFB020;background:rgba(255,176,32,.12)}
 .notice.urgent{border-color:#FF5C7A;background:rgba(255,92,122,.14)}
+
+/* Tool dari admin: layar penuh, tanpa kotak/panel/border */
+.tool-full{display:block;width:calc(100% + 32px);margin:0 -16px;border:0;background:transparent;height:calc(100vh - 64px - 38px - 72px - env(safe-area-inset-top) - env(safe-area-inset-bottom));height:calc(100dvh - 64px - 38px - 72px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+.tool-full[hidden]{display:none}

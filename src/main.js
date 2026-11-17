@@ -143,9 +143,9 @@ function tools(el) {
 
 // Tool tambahan: "url" membuka tautan di luar aplikasi, "html" dijalankan di sandbox
 function toolPg(el, tool) {
-  el.innerHTML = `<h2 class="page-title">${esc(tool.name)}</h2>` + (tool.kind === 'url'
-    ? `<div class="panel"><p class="mute">Halaman ini dibuka di luar aplikasi.</p><a class="btn" href="${esc(tool.url)}" target="_blank" rel="noopener">Buka</a></div>`
-    : `<div class="panel"><pre id="o">Memuat…</pre><iframe class="tool-frame" id="tf" title="${esc(tool.name)}" sandbox="allow-scripts allow-forms" hidden></iframe></div>`);
+  el.innerHTML = (tool.kind === 'url'
+    ? `<h2 class="page-title">${esc(tool.name)}</h2><div class="panel"><p class="mute">Halaman ini dibuka di luar aplikasi.</p><a class="btn" href="${esc(tool.url)}" target="_blank" rel="noopener">Buka</a></div>`
+    : `<pre id="o" class="mute">Memuat…</pre><iframe class="tool-full" id="tf" title="${esc(tool.name)}" sandbox="allow-scripts allow-forms" hidden></iframe>`);
   if (tool.kind === 'html') {
     fetch(`${API}${tool.url}`, { cache: 'no-store' })
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
