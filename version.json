@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "url": "https://github.com/nandayogas/NETCHECK/releases/download/v1.2.0/app-debug.apk",
+  "version": "1.2.4",
+  "url": "https://github.com/nandayogas/NETCHECK/releases/download/v1.2.4/app-debug.apk",
   "notes": "Fitur baru: notifikasi pembaruan dan pembaruan wajib.",
   "wajib": false
 }
