@@ -1,0 +1,51 @@
+/* NdaxTrade: dark mode modern. Hanya memengaruhi elemen .nx dan .nxdev. */
+.nx,.nxdev{--bg:#0b0f17;--card:#121a27;--card2:#182233;--line:#222e42;--txt:#e7edf7;--mut:#7e8ba1;--buy:#17c786;--sell:#ff4d5f;--wait:#f6b73c;--acc:#4f8cff;color:var(--txt)}
+.nx{display:flex;flex-direction:column;gap:12px;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:12px}
+.nx .buy{color:var(--buy)} .nx .sell{color:var(--sell)} .nx .wait{color:var(--wait)}
+.nx-mut{color:var(--mut);font-size:12px}
+.nx-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.nx-top{display:flex;justify-content:space-between;align-items:center}
+.nx-sym{font-size:11px;color:var(--mut);letter-spacing:.08em}
+.nx-price{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+.nx-pill{font-size:11px;padding:5px 10px;border-radius:99px;background:var(--card2);color:var(--mut)}
+.nx-pill.live{color:var(--buy)} .nx-pill.error{color:var(--sell)}
+.nx-sect{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0 0 10px}
+.nx-sigrow{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.nx-sig{font-size:28px;font-weight:800;padding:6px 18px;border-radius:12px;min-width:124px;text-align:center}
+.nx-sig.buy{background:rgba(23,199,134,.14)} .nx-sig.sell{background:rgba(255,77,95,.14)} .nx-sig.wait{background:rgba(246,183,60,.14)}
+.nx-dir{font-weight:700;font-size:14px;letter-spacing:.04em}
+.nx-pct{display:flex;justify-content:space-between;font-size:13px;font-weight:600}
+.nx-meter{height:8px;background:var(--sell);border-radius:6px;overflow:hidden;margin:8px 0 0}
+.nx-meter div{height:100%;background:var(--buy);transition:width .4s}
+.nx-levels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.nx-lv{background:var(--card2);border-radius:12px;padding:9px}
+.nx-lv small{display:block;color:var(--mut);font-size:11px;margin-bottom:2px}
+.nx-lv b{font-size:14px;font-variant-numeric:tabular-nums}
+.nx-tfgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.nx-tf{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;font:inherit;cursor:pointer}
+.nx-tf.on{border-color:var(--acc)}
+.nx-tf b{font-size:13px} .nx-tf span{font-size:12px;font-weight:700} .nx-tf small{color:var(--mut);font-size:10px}
+.nx-m{padding:9px 0;border-top:1px solid var(--line)}
+.nx-mh{display:flex;justify-content:space-between;font-size:13px;font-weight:600}
+.nx-bar{position:relative;height:6px;background:var(--card2);border-radius:4px;margin:6px 0}
+.nx-bar::after{content:'';position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:#3a4a63}
+.nx-bar i{position:absolute;top:0;bottom:0;border-radius:4px}
+.nx-bar .pos{background:var(--buy)} .nx-bar .neg{background:var(--sell)}
+.nx-note{font-size:12px;color:var(--mut)}
+.nx-fib{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:12px;color:var(--mut)}
+.nx-fib span{display:flex;justify-content:space-between;background:var(--card2);border-radius:10px;padding:7px 9px}
+.nx-fib b{color:var(--txt);font-variant-numeric:tabular-nums}
+.nx-foot{font-size:11px;color:var(--mut);text-align:center}
+/* Dev */
+.nxdev{background:var(--bg);min-height:100vh;margin:0;padding:calc(env(safe-area-inset-top) + 12px) 12px 24px;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.nxdev-wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.nxdev .inp,.nxdev .fld input{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:9px;font:inherit;width:100%}
+.nxdev .fld{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}
+.nxdev .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nxdev .sub{color:var(--acc);font-size:12px;margin:12px 0 6px;font-weight:600}
+.nxdev .sw{display:flex;gap:8px;align-items:center;font-size:13px;margin:6px 0}
+.nxdev .btn{background:var(--acc);color:#fff;border:0;border-radius:12px;padding:12px;font-weight:600;font-size:14px;width:100%;margin-top:8px;cursor:pointer}
+.nxdev .btn.ghost{background:var(--card2);color:var(--txt)}
+.nxdev .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nxdev .warn{background:rgba(246,183,60,.12);color:var(--wait);padding:10px;border-radius:12px;font-size:13px}
+.nxdev .msg{min-height:18px;font-size:13px;text-align:center}

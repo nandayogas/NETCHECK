@@ -136,6 +136,7 @@ const wordmark = () => `<span class="wm">${wordmarkInner('NETCHECK')}</span>`;
 // Semua tool. Kunci = nama route (atau nama fitur di panel admin untuk fitur yang ada).
 export const TOOL_DEFS = {
   ping: { name: 'Ping Test', icon: I.pulse },
+  ndaxtrade: { name: 'NdaxTrade', icon: I.signal },
   diag: { name: 'Cek Jaringan', icon: I.diag },
   speed: { name: 'Speed Test', icon: I.speed },
   ip: { name: 'IP Checker', icon: I.ip },

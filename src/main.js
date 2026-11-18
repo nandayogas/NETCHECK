@@ -5,6 +5,7 @@ import * as net from './modules/net.js';
 import { renderMore } from './modules/more.js';
 import { I, logo, shell, tile, customTile, wordmarkInner, socialHtml } from './ui.js';
 import { wifiPg } from './wifi.js';
+import { ndaxPg } from './ndax/view.js';
 import { accountHtml } from './auth.js';
 import { initGate } from './login.js';
 import './modules/live.js';
@@ -35,7 +36,7 @@ const enabled = k => cfg.features[k] !== false;
 
 // [kunci tool, segera hadir?]. Tool "segera" hanya tampilan, belum punya fungsi.
 const HOME_TOOLS = [['wifi'], ['speed'], ['ip'], ['scan', true], ['security'], ['ping']];
-const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi'], ['scan', true], ['security'], ['ai', true]];
+const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi'], ['scan', true], ['security'], ['ndaxtrade'], ['ai', true]];
 const toolsHtml = list => list
   .filter(([k, soon]) => soon || enabled(k))
   .map(([k, soon]) => tile(k, !!soon)).join('');
@@ -87,7 +88,7 @@ async function route(animate = true) {
   document.documentElement.style.setProperty('--accent', cfg.accent || '#087CFF');
 
   let R = {
-    home, tools, history, settings, about, more: morePg, wifi: wifiPg, security: securityPg,
+    home, tools, history, settings, about, more: morePg, wifi: wifiPg, security: securityPg, ndaxtrade: ndaxPg,
     ping: pingPg, diag: diagPg, speed: speedPg, ip: ipPg, monitor: monitorPg, device: devicePg,
   }[p];
   if (!R && p.startsWith('t/')) {
