@@ -6,7 +6,7 @@ const IMP = { high: ['#ff4d5f', 'HIGH'], medium: ['#f5b942', 'MED'], low: ['#7e8
 
 // Daftar event kalender. Data yang kosong ditampilkan sebagai "—", tidak diisi angka.
 export function calendarHtml(events = []) {
-  if (!events.length) return '<div class="nxm-empty">Tidak ada event untuk hari ini dan besok. Kalender diperbarui otomatis setiap 15 menit.</div>';
+  if (!events.length) return '<div class="nxm-empty">Tidak ada event mendatang. Kalender diperbarui otomatis setiap 15 menit.</div>';
   return events.map(e => {
     const [c, t] = IMP[e.impact] || IMP.none;
     return `<div class="nxm-li" style="gap:8px">
@@ -18,7 +18,7 @@ export function calendarHtml(events = []) {
 
 // Dampak USD dari event USD hari ini yang berdampak tinggi. Tidak memberi arah, hanya jumlah event.
 export function usdImpact(events = []) {
-  const n = events.filter(e => e.country === 'USD' && e.day === 'Hari ini' && e.impact === 'high').length;
+  const n = events.filter(e => e.country === 'USD' && e.today && e.impact === 'high').length;
   return n ? { label: `${n} event high impact hari ini`, hasHigh: true } : { label: 'Tidak ada event high impact hari ini', hasHigh: false };
 }
 
@@ -70,7 +70,7 @@ export function newsPanelHtml({ price = null, link = 'connecting', analysis = nu
     </div>
 
     <div class="nxm-card">
-      <div class="nxm-h">Economic Calendar <span class="nxm-tag low">HARI INI & BESOK · WIB</span></div>
+      <div class="nxm-h">Economic Calendar <span class="nxm-tag low">KALENDER · WIB</span></div>
       ${calWarn}${calendarHtml(events)}
     </div>
 

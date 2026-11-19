@@ -15,16 +15,17 @@ const dayKey = d => d.toLocaleDateString('en-CA', { timeZone: WIB });
 // Ubah data feed ke format tampilan. Hanya hari ini dan besok (WIB) yang diambil, diurutkan menurut waktu.
 function mapCal(raw) {
   const now = new Date();
-  const today = dayKey(now), tomorrow = dayKey(new Date(now.getTime() + 86400000));
+  const today = dayKey(now);
   return raw.map(x => {
     const d = new Date(x.date);
     if (isNaN(d)) return null;
     const k = dayKey(d);
-    if (k !== today && k !== tomorrow) return null;
+    if (k < today) return null; // hari ini dan seterusnya
     const imp = String(x.impact || '').toLowerCase();
     return {
       t: d.getTime(),
-      day: k === today ? 'Hari ini' : 'Besok',
+      day: k === today ? 'Hari ini' : d.toLocaleDateString('id-ID', { timeZone: WIB, weekday: 'short', day: '2-digit', month: 'short' }),
+      today: k === today,
       time: d.toLocaleTimeString('en-GB', { timeZone: WIB, hour: '2-digit', minute: '2-digit' }),
       country: x.country,
       title: x.title,
@@ -33,7 +34,7 @@ function mapCal(raw) {
       previous: x.previous,
       actual: x.actual,
     };
-  }).filter(Boolean).sort((a, b) => a.t - b.t);
+  }).filter(Boolean).sort((a, b) => a.t - b.t).slice(0, 150);
 }
 
 export function newsPg(el) {
