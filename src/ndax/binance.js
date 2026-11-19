@@ -8,7 +8,8 @@ const SPOT = [
   'https://api1.binance.com',
   'https://api3.binance.com',
 ];
-const FUT = ['https://fapi.binance.com'];
+// Futures: beberapa alamat cadangan, karena sebagian ISP hanya memblokir salah satunya.
+const FUT = ['https://fapi.binance.com', 'https://fapi1.binance.com', 'https://fapi2.binance.com', 'https://fapi3.binance.com'];
 
 // Simbol yang hanya ada di Binance Futures (kontrak perpetual TradFi).
 const FUTURES_SYMBOLS = new Set(['XAUUSDT', 'XAGUSDT']);
@@ -57,7 +58,7 @@ export async function fetchKlines(base, symbol, interval, limit) {
 
 // ---------- WebSocket publik (realtime) ----------
 // Stream publik tanpa API key. Futures (XAUUSDT) dan spot pakai alamat yang berbeda.
-const WS_FUT = ['wss://fstream.binance.com/ws'];
+const WS_FUT = ['wss://fstream.binance.com/ws', 'wss://fstream1.binance.com/ws', 'wss://fstream2.binance.com/ws', 'wss://fstream3.binance.com/ws'];
 const WS_SPOT = ['wss://data-stream.binance.vision/ws', 'wss://stream.binance.com:9443/ws'];
 
 // Membuka satu stream, mis. openStream('XAUUSDT', 'trade', onMsg, onState).
