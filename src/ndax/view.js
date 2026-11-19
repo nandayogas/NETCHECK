@@ -70,8 +70,9 @@ export function ndaxPg(el) {
     const prim = r?.tfs[r.primaryTf];
     const lvMain = valid ? r.levels : null;
     const lvOpp = valid && prim?.atr ? (() => {
-      const s = dirOpp === 'BUY' ? 1 : -1, risk = prim.atr * cfg.signal.atrSlMult;
-      return { entry: prim.price, sl: prim.price - s * risk, tp: prim.price + s * risk * cfg.signal.rr, rr: cfg.signal.rr };
+      const sg = prim.sig || cfg.signal;
+      const s = dirOpp === 'BUY' ? 1 : -1, risk = prim.atr * sg.atrSlMult;
+      return { entry: prim.price, sl: prim.price - s * risk, tp: prim.price + s * risk * sg.rr, rr: sg.rr };
     })() : null;
     const confMain = r ? (dirMain === 'BUY' ? r.bull : r.bear) : null;
     const confOpp = confMain != null ? 100 - confMain : null;

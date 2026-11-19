@@ -3,6 +3,10 @@
 export const NDAX_API = 'https://netcheck-api.nandayoga711.workers.dev';
 const ready = () => !NDAX_API.includes('GANTI');
 
+// Nama timeframe boleh ditulis angka menit (15, 60, dst.) lalu diubah ke kunci yang benar.
+const TF_ALIAS = { '1': 'M1', '5': 'M5', '15': 'M15', '30': 'M30', '60': 'H1', '240': 'H4', '1440': 'D1' };
+const normTf = v => { const x = String(v ?? '').trim().toUpperCase(); return TF_ALIAS[x] || x; };
+
 export const TF_ORDER = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
 
 export const DEFAULT_CONFIG = {
@@ -15,13 +19,13 @@ export const DEFAULT_CONFIG = {
   },
   primaryTf: 'H1',
   timeframes: {
-    M1:  { enabled: true, interval: '1m',  weight: 0.5 },
-    M5:  { enabled: true, interval: '5m',  weight: 0.7 },
-    M15: { enabled: true, interval: '15m', weight: 1.0 },
-    M30: { enabled: true, interval: '30m', weight: 1.2 },
-    H1:  { enabled: true, interval: '1h',  weight: 1.5 },
-    H4:  { enabled: true, interval: '4h',  weight: 1.8 },
-    D1:  { enabled: true, interval: '1d',  weight: 2.0 },
+    M1:  { enabled: true, interval: '1m',  weight: 0.5, threshold: null, sensitivity: null, atrSlMult: null, rr: null },
+    M5:  { enabled: true, interval: '5m',  weight: 0.7, threshold: null, sensitivity: null, atrSlMult: null, rr: null },
+    M15: { enabled: true, interval: '15m', weight: 1.0, threshold: null, sensitivity: null, atrSlMult: null, rr: null },
+    M30: { enabled: true, interval: '30m', weight: 1.2, threshold: null, sensitivity: null, atrSlMult: null, rr: null },
+    H1:  { enabled: true, interval: '1h',  weight: 1.5, threshold: null, sensitivity: null, atrSlMult: null, rr: null },
+    H4:  { enabled: true, interval: '4h',  weight: 1.8, threshold: null, sensitivity: null, atrSlMult: null, rr: null },
+    D1:  { enabled: true, interval: '1d',  weight: 2.0, threshold: null, sensitivity: null, atrSlMult: null, rr: null },
   },
   signal: {
     threshold: 0.25,  // skor minimum (0-1) untuk BUY/SELL
@@ -57,7 +61,7 @@ export function mergeConfig(r) {
   return {
     market: { ...DEFAULT_CONFIG.market, ...(r.market || {}) },
     signal: { ...DEFAULT_CONFIG.signal, ...(r.signal || {}) },
-    primaryTf: r.primaryTf || DEFAULT_CONFIG.primaryTf,
+    primaryTf: normTf(r.primaryTf) || DEFAULT_CONFIG.primaryTf,
     timeframes: mergeMap(DEFAULT_CONFIG.timeframes, r.timeframes),
     methods: mergeMap(DEFAULT_CONFIG.methods, r.methods),
   };

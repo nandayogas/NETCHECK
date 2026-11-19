@@ -18,6 +18,15 @@ const sgn = x => (x > 0 ? 1 : x < 0 ? -1 : 0);
 const ok = v => Number.isFinite(v);
 export const fmtP = v => Number(v.toFixed(v >= 1000 ? 2 : v >= 1 ? 4 : 6)).toString();
 
+// Parameter sinyal per timeframe: nilai override jika diisi, selain itu nilai global.
+const ov = (v, g) => (v == null || v === '' || !Number.isFinite(Number(v)) ? g : Number(v));
+export const sigFor = (t, cfg) => ({
+  threshold: ov(t?.threshold, cfg.signal.threshold),
+  sensitivity: ov(t?.sensitivity, cfg.signal.sensitivity),
+  atrSlMult: ov(t?.atrSlMult, cfg.signal.atrSlMult),
+  rr: ov(t?.rr, cfg.signal.rr),
+});
+
 // Analisis satu timeframe. Tiap metode menghasilkan skor -1..+1.
 export function analyzeTf(c, cfg) {
   const M = cfg.methods;
@@ -196,8 +205,10 @@ export function analyzeAll(data, cfg) {
   for (const [tf, t] of Object.entries(cfg.timeframes)) {
     const c = data[tf];
     if (!t.enabled || !c || c.length < 60) continue;
-    const r = analyzeTf(c, cfg);
-    r.signal = r.score >= thr ? 'BUY' : r.score <= -thr ? 'SELL' : 'WAIT';
+    const sg = sigFor(t, cfg);
+    const r = analyzeTf(c, { ...cfg, signal: sg });
+    r.sig = sg;
+    r.signal = r.score >= sg.threshold ? 'BUY' : r.score <= -sg.threshold ? 'SELL' : 'WAIT';
     tfs[tf] = r;
     num += r.score * t.weight;
     den += t.weight;
@@ -214,9 +225,10 @@ export function analyzeAll(data, cfg) {
   const prim = tfs[primaryTf];
   let levels = { entry: null, sl: null, tp: null, rr: null };
   if (signal !== 'WAIT' && prim.atr) {
-    const risk = prim.atr * cfg.signal.atrSlMult;
+    const sg = prim.sig || cfg.signal;
+    const risk = prim.atr * sg.atrSlMult;
     const s = signal === 'BUY' ? 1 : -1;
-    const entry = prim.price, sl = prim.price - s * risk, tp = prim.price + s * risk * cfg.signal.rr;
+    const entry = prim.price, sl = prim.price - s * risk, tp = prim.price + s * risk * sg.rr;
     // RR dihitung dari level yang ditampilkan: jarak TP dibagi jarak SL.
     const rr = Math.abs(tp - entry) / Math.abs(entry - sl);
     levels = { entry, sl, tp, rr: Number.isFinite(rr) ? rr : null };
