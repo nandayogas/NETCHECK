@@ -34,7 +34,7 @@ export function ndaxPg(el) {
   const id = ++session;               // sesi baru membatalkan loop sesi lama
   let cfg = readCache();
   let sym = (() => { try { return localStorage.getItem(SYM_KEY); } catch { return null; } })() || cfg.market.symbol;
-  const st = { price: null, link: 'connecting', err: '', result: null, updated: null, sel: null };
+  const st = { price: null, link: 'connecting', err: '', result: null, updated: null, sel: null, more: false };
 
   let streams = [];                   // fungsi penutup untuk stream WebSocket
   let chart = null, series = null, levelLines = [];
@@ -63,58 +63,97 @@ export function ndaxPg(el) {
     const t = r?.tfs[sel];
     const sig = r?.signal ?? 'WAIT';
     const d = dpOf(st.price ?? 1);
-    const lv = (label, v, c = '') => `<div class="nx-lv"><small>${label}</small><b class="${c}">${money(v, d)}</b></div>`;
+    const valid = sig !== 'WAIT';
+    // Setup utama = arah sinyal. Setup berlawanan dihitung dengan rumus yang sama. Saat WAIT tidak ada level.
+    const dirMain = valid ? sig : (r && r.score >= 0 ? 'BUY' : 'SELL');
+    const dirOpp = dirMain === 'BUY' ? 'SELL' : 'BUY';
+    const prim = r?.tfs[r.primaryTf];
+    const lvMain = valid ? r.levels : null;
+    const lvOpp = valid && prim?.atr ? (() => {
+      const s = dirOpp === 'BUY' ? 1 : -1, risk = prim.atr * cfg.signal.atrSlMult;
+      return { entry: prim.price, sl: prim.price - s * risk, tp: prim.price + s * risk * cfg.signal.rr, rr: cfg.signal.rr };
+    })() : null;
+    const confMain = r ? (dirMain === 'BUY' ? r.bull : r.bear) : null;
+    const confOpp = confMain != null ? 100 - confMain : null;
+
+    const setup = (kind, dir, lv, conf, badge) => {
+      const isBuy = dir === 'BUY';
+      const dd = dpOf(lv?.entry ?? st.price ?? 1);
+      const c = v => money(v, dd);
+      return `<section class="nx-setup ${kind}">
+        <div class="nx-sh"><span class="nx-rk">${kind === 'low' ? '✔ LOW RISK' : '⚠ HIGH RISK'}</span><span class="nx-badge">${badge}</span></div>
+        <div class="nx-dirbig">${isBuy ? '↗' : '↓'} ${dir}</div>
+        <div class="nx-lvs">
+          <div><small>ENTRY</small><b>${c(lv?.entry)}</b></div>
+          <div><small>SL</small><b class="sell">${c(lv?.sl)}</b></div>
+          <div><small>TP</small><b class="buy">${c(lv?.tp)}</b></div>
+        </div>
+        <div class="nx-rrline"><span>Risk Reward : ${lv?.rr != null ? '1 : ' + lv.rr.toFixed(2) : '—'}</span><span class="nx-conf">Confidence ${conf != null ? conf + '%' : '—'}</span></div>
+      </section>`;
+    };
+
+    const ms = t?.methods ?? [];
+    const stat = m => (m.score > 0.05 ? ['Bullish', 'buy'] : m.score < -0.05 ? ['Bearish', 'sell'] : ['Neutral', 'neu']);
+    const nBull = ms.filter(m => m.score > 0.05).length;
+    const nBear = ms.filter(m => m.score < -0.05).length;
+    const nNeu = ms.length - nBull - nBear;
+
     const tfBtn = k => {
       const x = r?.tfs[k];
       return `<button class="nx-tf${sel === k ? ' on' : ''}" data-tf="${k}">
         <b>${k}</b><span class="${tone(x?.signal)}">${x?.signal ?? '—'}</span>
         <small>${x ? Math.round((1 + x.score) / 2 * 100) + '%' : ''}</small></button>`;
     };
+    const chip = m => { const [label, c] = stat(m); return `<div class="nx-mc ${c}"><i></i><div><b>${esc(m.label)}</b><span>${label}</span></div></div>`; };
     const fibHtml = t?.fib
       ? `<div class="nx-sect">Fibonacci ${sel}</div><div class="nx-fib">${t.fib.levels.map(l =>
           `<span>${(l.ratio * 100).toFixed(1)}%<b>${money(l.price, d)}</b></span>`).join('')}</div>`
       : '';
+
     return `
     <header class="nx-top">
-      <div>
-        <div class="nx-sym">${esc(sym)} · NdaxTrade</div>
-        <div class="nx-price">${money(st.price, d)}</div>
-      </div>
+      <div class="nx-brand"><span class="nx-logo">◆</span><div><b>NDAXTRADE</b><small>Smart Market Analysis</small></div></div>
       <span class="nx-pill ${st.link}">${LINK[st.link]}</span>
     </header>
 
-    <div class="nx-mk">${MARKETS.map(m =>
-      `<button class="nx-chip${sym === m.sym ? ' on' : ''}" data-sym="${m.sym}">${m.label}</button>`).join('')}</div>
+    <section class="nx-card nx-hero">
+      <div class="nx-sym">${esc(sym)} · NdaxTrade</div>
+      <div class="nx-price">${money(st.price, d)}</div>
+      <div class="nx-mk">${MARKETS.map(m =>
+        `<button class="nx-chip${sym === m.sym ? ' on' : ''}" data-sym="${m.sym}">${m.label}</button>`).join('')}</div>
+    </section>
 
     <div id="nxslot"></div>
-
-    <section class="nx-card">
-      <div class="nx-sigrow">
-        <div class="nx-sig ${tone(sig)}">${sig}</div>
-        <div>
-          <div class="nx-dir ${tone(r?.dir)}">${r ? r.dir : 'MENUNGGU DATA'}</div>
-          <div class="nx-mut">Kekuatan sinyal ${r ? r.strength : 0}%</div>
-        </div>
-      </div>
-      <div class="nx-pct"><span class="buy">Bullish ${r ? r.bull : '—'}%</span><span class="sell">Bearish ${r ? r.bear : '—'}%</span></div>
-      <div class="nx-meter"><div style="width:${r ? r.bull : 50}%"></div></div>
-      <div class="nx-levels">
-        ${lv('Entry', r?.levels.entry)}
-        ${lv('Stop Loss', r?.levels.sl, 'sell')}
-        ${lv('Take Profit', r?.levels.tp, 'buy')}
-      </div>
-      <div class="nx-mut nx-rr">Risk : Reward ${r?.levels.rr != null ? '1 : ' + r.levels.rr.toFixed(2) : '—'}</div>
-    </section>
 
     <section class="nx-card">
       <div class="nx-sect">Timeframe</div>
       <div class="nx-tfgrid">${TF_ORDER.filter(k => cfg.timeframes[k]?.enabled).map(tfBtn).join('')}</div>
     </section>
 
+    <div class="nx-setups">
+      ${setup('low', dirMain, lvMain, confMain, !valid ? 'MENUNGGU' : r.strength >= 50 ? 'HIGH CONFLUENCE' : 'CONFLUENCE SEDANG')}
+      ${setup('high', dirOpp, lvOpp, confOpp, 'SPECULATIVE')}
+    </div>
+    ${valid ? '' : '<div class="nx-mut nx-wait">Belum ada sinyal valid. Level Entry, SL, dan TP akan muncul saat sinyal BUY atau SELL.</div>'}
+
     <section class="nx-card">
-      <div class="nx-sect">Detail ${sel}${t ? ` · skor ${Math.round(t.score * 100)}` : ''}</div>
-      ${t ? t.methods.map(row).join('') : '<div class="nx-mut">Menunggu data pasar…</div>'}
-      ${fibHtml}
+      <div class="nx-dh"><span class="nx-h">Analysis Summary</span><span class="nx-mut">Last Update ${st.updated ? new Date(st.updated).toLocaleTimeString('id-ID') : '—'}</span></div>
+      <div class="nx-tiles">
+        <div class="nx-tile buy"><small>Bullish Methods</small><b>${nBull} / ${ms.length || '—'}</b></div>
+        <div class="nx-tile neu"><small>Neutral Methods</small><b>${nNeu} / ${ms.length || '—'}</b></div>
+        <div class="nx-tile sell"><small>Bearish Methods</small><b>${nBear} / ${ms.length || '—'}</b></div>
+      </div>
+      <div class="nx-pct" style="margin-top:12px"><span class="buy">Bullish ${r ? r.bull : '—'}%</span><span class="sell">Bearish ${r ? r.bear : '—'}%</span></div>
+      <div class="nx-meter"><div style="width:${r ? r.bull : 50}%"></div></div>
+      <div class="nx-mut" style="margin-top:6px">${r ? r.dir : 'MENUNGGU DATA'} · kekuatan ${r ? r.strength : 0}% · ${sel}${t ? ` · skor ${Math.round(t.score * 100)}` : ''}</div>
+    </section>
+
+    <section class="nx-card">
+      <div class="nx-dh"><span class="nx-h">Detail Analisis Metode</span>
+        <button class="nx-toggle" data-act="more">${st.more ? 'Tutup' : 'Lihat Detail'}</button></div>
+      <div class="nx-mcs">${ms.slice(0, 4).map(chip).join('')}${ms.length > 4 && !st.more
+        ? `<button class="nx-mc nx-more" data-act="more"><b>+${ms.length - 4}</b><span>lainnya</span></button>` : ''}</div>
+      ${st.more ? `<div class="nx-full">${ms.length ? ms.map(row).join('') : '<div class="nx-mut">Menunggu data pasar…</div>'}${fibHtml}</div>` : ''}
     </section>
 
     <footer class="nx-foot">Update ${st.updated ? new Date(st.updated).toLocaleTimeString('id-ID') : '—'}${st.err ? ' · ' + esc(st.err) : ''}</footer>`;
@@ -223,6 +262,7 @@ export function ndaxPg(el) {
       draw(); doPrice(); doAnalysis(); startStreams(); loadChart();
       return;
     }
+    if (e.target.closest('[data-act="more"]')) { st.more = !st.more; draw(); return; }
     const b = e.target.closest('[data-tf]');
     if (b) {
       st.sel = b.dataset.tf;
