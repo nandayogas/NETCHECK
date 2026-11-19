@@ -2,10 +2,12 @@
 // Harga XAUUSD diperbarui setiap 5 detik. Grafik M15 diperbarui setiap 60 detik. Semua berhenti saat halaman ditutup.
 import { newsPanelHtml } from './news.js';
 import { fetchPrice, fetchKlines } from './binance.js';
+import { mergeConfig, loadRemoteConfig } from './config.js';
+import { analyzeAll } from './analyzer.js';
 import { createChart, CrosshairMode } from 'lightweight-charts';
 import './ndax.css';
 
-const SYM = 'XAUUSDT', IV = '15m', LIMIT = 120, BASE = 'https://api.binance.com';
+const SYM = 'XAUUSDT', IV = '15m', LIMIT = 120, BASE = 'https://api.binance.com', AN_MS = 30000;
 
 export function newsPg(el) {
   el.innerHTML = '<div class="nxm-page" id="nxm-root"></div>';
@@ -13,7 +15,8 @@ export function newsPg(el) {
   const alive = () => root.isConnected;
   const chartEl = document.createElement('div');
   chartEl.className = 'nxm-chart';
-  let chart = null, series = null, price = null, link = 'connecting', tPrice = null, tChart = null, ro = null;
+  let chart = null, series = null, price = null, link = 'connecting', tPrice = null, tChart = null, tAn = null, ro = null;
+  let cfg = mergeConfig(null), analysis = null, updated = null;
 
   const ensureChart = () => {
     if (chart) return;
@@ -34,7 +37,7 @@ export function newsPg(el) {
   };
 
   const cleanup = () => {
-    clearTimeout(tPrice); clearTimeout(tChart);
+    clearTimeout(tPrice); clearTimeout(tChart); clearTimeout(tAn);
     if (ro) ro.disconnect();
     if (chart) chart.remove();
     chart = null; series = null; ro = null;
@@ -42,7 +45,7 @@ export function newsPg(el) {
 
   const draw = () => {
     if (!alive()) return;
-    root.innerHTML = newsPanelHtml({ price, link });
+    root.innerHTML = newsPanelHtml({ price, link, analysis, updated });
     const slot = root.querySelector('#nxm-slot');
     if (slot) slot.appendChild(chartEl);
   };
@@ -65,8 +68,26 @@ export function newsPg(el) {
     tChart = setTimeout(tickChart, 60000);
   };
 
+  // Analisis teknikal XAUUSD memakai mesin NdaxTrade yang sama dengan halaman utama.
+  const tickAnalysis = async () => {
+    if (!alive()) return cleanup();
+    try {
+      const remote = await loadRemoteConfig();
+      if (remote) cfg = remote;
+      const data = {};
+      await Promise.all(Object.entries(cfg.timeframes).filter(([, t]) => t.enabled).map(async ([tf, t]) => {
+        try { data[tf] = await fetchKlines(BASE, SYM, t.interval, cfg.market.candles); } catch { /* lewati timeframe ini */ }
+      }));
+      const r = analyzeAll(data, cfg);
+      if (r) { analysis = r; updated = Date.now(); }
+    } catch { /* coba lagi pada putaran berikutnya */ }
+    draw();
+    tAn = setTimeout(tickAnalysis, AN_MS);
+  };
+
   draw();
   tickPrice();
   tickChart();
+  tickAnalysis();
   return cleanup;
 }

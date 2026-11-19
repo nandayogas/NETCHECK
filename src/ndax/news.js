@@ -1,46 +1,40 @@
-// FX NEWS INTELLIGENCE: tampilan mobile. SEMUA ANGKA BERITA DI SINI CONTOH (SIMULASI).
-// Tidak dipakai untuk analisis, backtest, atau arah BULLISH/BEARISH.
+// FX NEWS INTELLIGENCE. Hanya menampilkan data real yang tersedia.
+// Kalender dan berita belum terhubung, jadi bagian itu kosong sampai sumbernya ada.
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-export const SIM_EVENTS = [
-  { name: 'CPI YoY', time: '19:30', impact: 'high', forecast: '3.1%', actual: null, previous: '3.2%' },
-  { name: 'NFP', time: '20:30', impact: 'high', forecast: '180K', actual: null, previous: '190K' },
-  { name: 'FOMC Speech', time: '22:00', impact: 'high', forecast: '—', actual: null, previous: '—' },
-  { name: 'PCE YoY', time: '19:30', impact: 'high', forecast: '2.8%', actual: null, previous: '2.9%' },
-  { name: 'GDP QoQ', time: '19:30', impact: 'medium', forecast: '2.1%', actual: null, previous: '2.0%' },
-  { name: 'PMI Manufaktur', time: '21:45', impact: 'medium', forecast: '52.0', actual: null, previous: '51.5' },
-];
-const SIM_ANALYSIS = { bull: 82, dir: 'BULLISH', usd: 'Bearish', gold: 'Bullish', reasons: ['Actual < Forecast', 'Dampak ke USD: Bearish', 'Reaksi pasar: positif untuk XAUUSD'] };
-
-// Status input: dibaca dari sumber yang benar-benar terhubung.
-export function inputStatus({ events = [], fedText = null, usdSeries = null, geoNews = null } = {}) {
-  const calendarReal = events.some(e => !e.simulated && e.actual != null);
+// Status input berita. Hanya REAL bila sumbernya benar-benar terhubung.
+export function inputStatus({ events = [], fedText = null, usdSeries = null, geoNews = null, analysis = null } = {}) {
   return [
-    { key: 'Kalender (Actual, Forecast, Previous)', state: calendarReal ? 'REAL' : 'BELUM TERHUBUNG' },
+    { key: 'Kalender ekonomi (Actual, Forecast, Previous)', state: events.length ? 'REAL' : 'BELUM TERHUBUNG' },
     { key: 'Teks pernyataan The Fed', state: fedText ? 'REAL' : 'BELUM TERHUBUNG' },
     { key: 'Seri USD (DXY atau EURUSD)', state: usdSeries ? 'REAL' : 'BELUM TERHUBUNG' },
     { key: 'Berita geopolitik', state: geoNews ? 'REAL' : 'BELUM TERHUBUNG' },
-    { key: 'Volatilitas dan momentum XAUUSD', state: 'MENUNGGU CANDLE' },
+    { key: 'Data teknikal XAUUSD', state: analysis ? 'REAL' : 'MENUNGGU DATA' },
   ];
 }
 
+// Arah berita hanya SIAP bila semua input berita REAL. Sebelum itu, arah berasal dari teknikal saja.
 export function engineStatus(inputs) {
-  return inputs.every(i => i.state === 'REAL')
-    ? { label: 'SIAP', detail: 'Semua input real tersedia.' }
-    : { label: 'WAITING FOR CONFIRMATION', detail: 'Input real belum lengkap. Angka di bawah hanya contoh.' };
+  return inputs.slice(0, 4).every(i => i.state === 'REAL')
+    ? { label: 'SIAP', detail: 'Semua input berita tersedia.' }
+    : { label: 'TEKNIKAL SAJA', detail: 'Berita belum terhubung. Arah hanya dari analisis teknikal.' };
 }
 
-const wibShort = () => new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const wibShort = t => new Date(t ?? Date.now()).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const px = v => (v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const dirTone = d => (d === 'BULLISH' || d === 'BUY' ? 'buy' : d === 'BEARISH' || d === 'SELL' ? 'sell' : 'wait');
 
-export function newsPanelHtml({ price = null, link = 'connecting', events = SIM_EVENTS, fedText = null, usdSeries = null, geoNews = null } = {}) {
-  const inputs = inputStatus({ events, fedText, usdSeries, geoNews });
+export function newsPanelHtml({ price = null, link = 'connecting', analysis = null, updated = null, events = [] } = {}) {
+  const inputs = inputStatus({ events, analysis });
   const eng = engineStatus(inputs);
-  const a = SIM_ANALYSIS;
   const pill = { live: ['live', 'LIVE'], connecting: ['connecting', 'MENGHUBUNGKAN'], error: ['error', 'OFFLINE'] }[link] || ['error', 'OFFLINE'];
+  const prim = analysis ? analysis.tfs[analysis.primaryTf] : null;
+  const reasons = prim
+    ? [...prim.methods].sort((a, b) => Math.abs(b.score * b.weight) - Math.abs(a.score * a.weight)).slice(0, 4)
+    : [];
   return `
   <section class="nxm">
-    <div class="nxm-banner">CONTOH TAMPILAN · DATA SIMULASI · BUKAN ANALISIS</div>
+    <div class="nxm-banner">ANALISIS TEKNIKAL REAL · KALENDER BERITA BELUM TERHUBUNG</div>
 
     <header class="nxm-hd">
       <div class="nxm-title"><b>FX NEWS INTELLIGENCE</b><small>Smart News · Deep Analysis</small></div>
@@ -49,26 +43,23 @@ export function newsPanelHtml({ price = null, link = 'connecting', events = SIM_
 
     <div class="nxm-info">
       <div><small>Waktu WIB</small><b>${esc(wibShort())}</b></div>
-      <div><small>USD Impact</small><b class="sell">High</b></div>
+      <div><small>USD Impact</small><b class="wait">Belum ada</b></div>
       <div><small>XAUUSD</small><b>${px(price)}</b></div>
     </div>
 
     <div class="nxm-card">
       <div class="nxm-h">Economic Calendar</div>
-      <div class="nxm-scroll">
-        <table class="nxm-tbl">
-          <thead><tr><th>Waktu</th><th>Berita</th><th>Fcst</th><th>Actual</th><th>Prev</th><th>Dampak</th></tr></thead>
-          <tbody>${events.map(e => `<tr><td>${esc(e.time)}</td><td>${esc(e.name)}</td><td>${esc(e.forecast)}</td><td>${esc(e.actual ?? '—')}</td><td>${esc(e.previous)}</td><td><span class="nxm-tag ${e.impact}">${esc(e.impact.toUpperCase())}</span></td></tr>`).join('')}</tbody>
-        </table>
-      </div>
-      <div class="nxm-hint">Geser tabel ke kiri atau kanan untuk melihat semua kolom</div>
+      ${events.length ? '' : '<div class="nxm-empty">Belum ada sumber kalender terhubung. Data CPI, NFP, FOMC, PCE, GDP, dan PMI akan muncul setelah sumbernya dihubungkan.</div>'}
     </div>
 
     <div class="nxm-card">
-      <div class="nxm-h">Latest Analysis <span class="nxm-tag low">CONTOH</span></div>
-      <div class="nxm-ring" style="background:conic-gradient(#22c55e ${a.bull}%, #1b2536 0)"><div><b>${a.bull}%</b><small>Bullish</small></div></div>
-      <div class="nxm-dir">↗ XAUUSD: ${a.dir}</div>
-      <ul class="nxm-why">${a.reasons.map(r => `<li>✔ ${esc(r)}</li>`).join('')}</ul>
+      <div class="nxm-h">Latest Analysis <span class="nxm-tag low">TEKNIKAL</span></div>
+      ${analysis ? `
+        <div class="nxm-ring" style="background:conic-gradient(#22c55e ${analysis.bull}%, #ff4d5f 0)"><div><b>${analysis.bull}%</b><small>Bullish</small><em>${analysis.bear}% Bearish</em></div></div>
+        <div class="nxm-dir ${dirTone(analysis.dir)}">${esc(analysis.dir)} · sinyal ${esc(analysis.signal)}</div>
+        <div class="nxm-sub">Timeframe utama ${esc(analysis.primaryTf)} · kekuatan ${analysis.strength}%</div>
+        <ul class="nxm-why">${reasons.map(m => `<li><b class="${m.score >= 0 ? 'buy' : 'sell'}">${m.score >= 0 ? '+' : ''}${m.score.toFixed(2)}</b> ${esc(m.label)}: ${esc(m.note)}</li>`).join('')}</ul>`
+        : '<div class="nxm-empty">Menunggu data candle XAUUSD dari Binance.</div>'}
     </div>
 
     <div class="nxm-card">
@@ -77,29 +68,26 @@ export function newsPanelHtml({ price = null, link = 'connecting', events = SIM_
     </div>
 
     <div class="nxm-grid2">
-      <div class="nxm-card"><small>Dampak USD</small><b class="sell">${a.usd}</b></div>
-      <div class="nxm-card"><small>Dampak XAUUSD</small><b class="buy">${a.gold}</b></div>
-      <div class="nxm-card"><small>Kekuatan sinyal</small><b>${a.bull}%</b><div class="nxm-meter"><i style="width:${a.bull}%"></i></div></div>
+      <div class="nxm-card"><small>Dampak USD</small><b class="wait">Menunggu berita</b></div>
+      <div class="nxm-card"><small>Dampak XAUUSD</small><b class="${analysis ? dirTone(analysis.dir) : 'wait'}">${analysis ? esc(analysis.dir) : '—'}</b></div>
+      <div class="nxm-card"><small>Kekuatan sinyal</small><b>${analysis ? analysis.strength + '%' : '—'}</b><div class="nxm-meter"><i style="width:${analysis ? analysis.strength : 0}%"></i></div></div>
       <div class="nxm-card"><small>Status mesin</small><b class="wait">${esc(eng.label)}</b></div>
     </div>
 
     <div class="nxm-card">
       <div class="nxm-h">Advanced Analysis Engine</div>
-      <div class="nxm-chips">
-        <div class="nxm-chip">Fundamental</div>
-        <div class="nxm-chip">Historis</div>
-        <div class="nxm-chip">Korelasi USD</div>
-        <div class="nxm-chip">Sentimen</div>
-        <div class="nxm-chip">Volatilitas</div>
-        <div class="nxm-chip">Prediksi arah</div>
-      </div>
+      <div class="nxm-li"><span>Analisis teknikal</span><b class="${analysis ? 'buy' : 'wait'}">${analysis ? 'AKTIF' : 'MENUNGGU'}</b></div>
+      <div class="nxm-li"><span>Volatilitas dan momentum</span><b class="${analysis ? 'buy' : 'wait'}">${analysis ? 'AKTIF' : 'MENUNGGU'}</b></div>
+      <div class="nxm-li"><span>Fundamental dan kalender</span><b class="wait">BELUM TERHUBUNG</b></div>
+      <div class="nxm-li"><span>Sentimen Fed</span><b class="wait">BELUM TERHUBUNG</b></div>
+      <div class="nxm-li"><span>Korelasi USD</span><b class="wait">BELUM TERHUBUNG</b></div>
     </div>
 
     <div class="nxm-card">
       <div class="nxm-h">Informasi</div>
-      <div class="nxm-li"><span>Berita</span><b>CPI AS (contoh)</b></div>
-      <div class="nxm-li"><span>Sumber</span><b>Economicium (belum terhubung)</b></div>
-      <div class="nxm-li"><span>Update terakhir</span><b>${esc(wibShort())}</b></div>
+      <div class="nxm-li"><span>Berita</span><b>Belum ada</b></div>
+      <div class="nxm-li"><span>Sumber berita</span><b>Belum terhubung</b></div>
+      <div class="nxm-li"><span>Update analisis</span><b>${updated ? esc(wibShort(updated)) : '—'}</b></div>
       <button class="nxm-notif" disabled>Notifikasi belum aktif</button>
     </div>
 
@@ -108,6 +96,6 @@ export function newsPanelHtml({ price = null, link = 'connecting', events = SIM_
       ${inputs.map(i => `<div class="nxm-li"><span>${esc(i.key)}</span><b class="${i.state === 'REAL' ? 'buy' : 'wait'}">${esc(i.state)}</b></div>`).join('')}
     </div>
 
-    <div class="nxm-foot">FX NEWS INTELLIGENCE v1.0 · data real-time menunggu sumber terhubung</div>
+    <div class="nxm-foot">FX NEWS INTELLIGENCE v1.0</div>
   </section>`;
 }
