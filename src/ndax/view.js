@@ -1,7 +1,8 @@
 // Halaman NdaxTrade di dalam NETCHECK. Dipanggil dari route `ndaxtrade`.
 import { mergeConfig, TF_ORDER, loadRemoteConfig } from './config.js';
-import { fetchKlines, fetchPrice } from './binance.js';
+import { fetchKlines, fetchPrice, openStream, toCandle } from './binance.js';
 import { analyzeAll, fmtP } from './analyzer.js';
+import { createChart, CrosshairMode } from 'lightweight-charts';
 import './ndax.css';
 
 const CACHE_KEY = 'ndax.cfg';
@@ -12,6 +13,8 @@ const MARKETS = [
   { sym: 'XAUUSDT',  label: 'XAU/USD' },
   { sym: 'PAXGUSDT', label: 'XAU (PAXG)' },
 ];
+// Dipakai bila timeframe tidak ada di konfigurasi.
+const INTERVAL = { M1: '1m', M5: '5m', M15: '15m', M30: '30m', H1: '1h', H4: '4h', D1: '1d' };
 let session = 0;
 
 const readCache = () => {
@@ -24,6 +27,8 @@ const money = (v, d) => (v == null || !Number.isFinite(v) ? '—' :
   v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }));
 const tone = s => (s === 'BUY' || s === 'BULLISH' ? 'buy' : s === 'SELL' || s === 'BEARISH' ? 'sell' : 'wait');
 const LINK = { connecting: 'MENGHUBUNGKAN', live: 'LIVE', error: 'OFFLINE' };
+// lightweight-charts memakai waktu dalam detik.
+const candleOf = c => ({ time: Math.floor(c.t / 1000), open: c.o, high: c.h, low: c.l, close: c.c });
 
 export function ndaxPg(el) {
   const id = ++session;               // sesi baru membatalkan loop sesi lama
@@ -31,9 +36,16 @@ export function ndaxPg(el) {
   let sym = (() => { try { return localStorage.getItem(SYM_KEY); } catch { return null; } })() || cfg.market.symbol;
   const st = { price: null, link: 'connecting', err: '', result: null, updated: null, sel: null };
 
+  let streams = [];                   // fungsi penutup untuk stream WebSocket
+  let chart = null, series = null, levelLines = [];
+  const chartEl = document.createElement('div');   // dibuat sekali, dipasang ulang setiap render
+  chartEl.className = 'nx-chart';
+
   el.innerHTML = '<div class="nx" id="nx"></div>';
   const root = el.querySelector('#nx');
   const alive = () => id === session && root.isConnected;
+  const chartTf = () => st.sel || cfg.primaryTf;
+  const intervalOf = tf => cfg.timeframes[tf]?.interval || INTERVAL[tf] || '1h';
 
   const row = m => {
     const w = Math.abs(m.score) * 50, pos = m.score >= 0;
@@ -73,6 +85,8 @@ export function ndaxPg(el) {
     <div class="nx-mk">${MARKETS.map(m =>
       `<button class="nx-chip${sym === m.sym ? ' on' : ''}" data-sym="${m.sym}">${m.label}</button>`).join('')}</div>
 
+    <div id="nxslot"></div>
+
     <section class="nx-card">
       <div class="nx-sigrow">
         <div class="nx-sig ${tone(sig)}">${sig}</div>
@@ -104,18 +118,115 @@ export function ndaxPg(el) {
     <footer class="nx-foot">Update ${st.updated ? new Date(st.updated).toLocaleTimeString('id-ID') : '—'}${st.err ? ' · ' + esc(st.err) : ''}</footer>`;
   };
 
-  const draw = () => { if (alive()) root.innerHTML = view(); };
+  // ---------- grafik ----------
+  const ensureChart = () => {
+    if (chart) return;
+    chart = createChart(chartEl, {
+      height: 230,
+      layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#7e8ba1' },
+      grid: { vertLines: { color: '#1b2536' }, horzLines: { color: '#1b2536' } },
+      rightPriceScale: { borderColor: '#222e42' },
+      timeScale: { borderColor: '#222e42', timeVisible: true },
+      crosshair: { mode: CrosshairMode.Normal },
+    });
+    series = chart.addCandlestickSeries({
+      upColor: '#17c786', downColor: '#ff4d5f', borderVisible: false,
+      wickUpColor: '#17c786', wickDownColor: '#ff4d5f',
+    });
+    new ResizeObserver(() => { if (chart) chart.applyOptions({ width: chartEl.clientWidth }); }).observe(chartEl);
+  };
+
+  const mountChart = () => {
+    const slot = root.querySelector('#nxslot');
+    if (slot && chartEl.parentNode !== slot) slot.appendChild(chartEl);
+  };
+
+  const clearLevels = () => {
+    if (series) levelLines.forEach(l => series.removePriceLine(l));
+    levelLines = [];
+  };
+
+  // Garis Entry/SL/TP dihitung dari timeframe utama, jadi hanya digambar saat grafik menampilkan timeframe itu.
+  const drawLevels = () => {
+    clearLevels();
+    const r = st.result;
+    if (!series || !r || !r.levels || r.levels.entry == null || chartTf() !== r.primaryTf) return;
+    const add = (price, color, title) => levelLines.push(series.createPriceLine({
+      price, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title,
+    }));
+    add(r.levels.entry, '#4f8cff', 'Entry');
+    add(r.levels.sl, '#ff4d5f', 'SL');
+    add(r.levels.tp, '#17c786', 'TP');
+  };
+
+  async function loadChart() {
+    const s = sym, tf = chartTf();
+    ensureChart();
+    try {
+      const list = await fetchKlines(cfg.market.baseUrl, s, intervalOf(tf), cfg.market.candles);
+      if (s !== sym || tf !== chartTf() || !alive()) return;
+      series.setData(list.map(candleOf));
+      drawLevels();
+    } catch (e) {
+      if (s === sym) st.err = 'Grafik: ' + e.message;
+      draw();
+    }
+  }
+
+  // Harga di header diperbarui langsung tanpa membangun ulang seluruh halaman.
+  const updatePrice = () => {
+    const pe = root.querySelector('.nx-price');
+    if (pe) pe.textContent = money(st.price, dpOf(st.price ?? 1));
+    const pill = root.querySelector('.nx-pill');
+    if (pill) { pill.className = `nx-pill ${st.link}`; pill.textContent = LINK[st.link]; }
+  };
+
+  const stopAll = () => {
+    streams.forEach(close => close());
+    streams = [];
+    if (chart) { chart.remove(); chart = null; series = null; levelLines = []; }
+  };
+
+  // Stream realtime: trade untuk harga, kline untuk candle yang sedang berjalan.
+  function startStreams() {
+    streams.forEach(close => close());
+    streams = [];
+    const s = sym, tf = chartTf(), iv = intervalOf(tf);
+    streams.push(openStream(s, 'trade', m => {
+      if (!alive()) return stopAll();
+      if (s !== sym || m.p == null) return;
+      st.price = +m.p; st.link = 'live'; st.err = '';
+      updatePrice();
+    }, () => {}));
+    streams.push(openStream(s, `kline_${iv}`, m => {
+      if (!alive()) return stopAll();
+      if (s !== sym || tf !== chartTf() || !series || !m.k) return;
+      series.update(candleOf(toCandle(m.k)));
+    }, () => {}));
+  }
+
+  const draw = () => {
+    if (!alive()) return;
+    root.innerHTML = view();
+    mountChart();
+  };
+
   root.addEventListener('click', e => {
     const m = e.target.closest('[data-sym]');
     if (m && m.dataset.sym !== sym) {
       sym = m.dataset.sym;
       try { localStorage.setItem(SYM_KEY, sym); } catch { /* abaikan */ }
       Object.assign(st, { price: null, link: 'connecting', err: '', result: null, updated: null });
-      draw(); doPrice(); doAnalysis();
+      clearLevels();
+      draw(); doPrice(); doAnalysis(); startStreams(); loadChart();
       return;
     }
     const b = e.target.closest('[data-tf]');
-    if (b) { st.sel = b.dataset.tf; draw(); }
+    if (b) {
+      st.sel = b.dataset.tf;
+      clearLevels();
+      draw(); startStreams(); loadChart();
+    }
   });
 
   const loop = (fn, ms) => {
@@ -157,10 +268,13 @@ export function ndaxPg(el) {
     if (r) { st.result = r; st.updated = Date.now(); }
     st.err = errs.join(' · ');
     draw();
+    drawLevels();
   }
 
   loop(doPrice, () => cfg.market.priceRefreshSec * 1000);
   loop(doAnalysis, () => cfg.market.analysisRefreshSec * 1000);
 
   draw();
+  startStreams();
+  loadChart();
 }
