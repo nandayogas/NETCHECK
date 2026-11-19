@@ -56,3 +56,5 @@
 
 /* Grafik candle realtime (lightweight-charts) */
 .nx-chart{width:100%;height:230px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--card)}
+
+.nx-rr{margin-top:8px;text-align:right;font-size:12px}

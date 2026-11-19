@@ -193,11 +193,14 @@ export function analyzeAll(data, cfg) {
 
   const primaryTf = tfs[cfg.primaryTf] ? cfg.primaryTf : keys[0];
   const prim = tfs[primaryTf];
-  let levels = { entry: null, sl: null, tp: null };
+  let levels = { entry: null, sl: null, tp: null, rr: null };
   if (signal !== 'WAIT' && prim.atr) {
     const risk = prim.atr * cfg.signal.atrSlMult;
     const s = signal === 'BUY' ? 1 : -1;
-    levels = { entry: prim.price, sl: prim.price - s * risk, tp: prim.price + s * risk * cfg.signal.rr };
+    const entry = prim.price, sl = prim.price - s * risk, tp = prim.price + s * risk * cfg.signal.rr;
+    // RR dihitung dari level yang ditampilkan: jarak TP dibagi jarak SL.
+    const rr = Math.abs(tp - entry) / Math.abs(entry - sl);
+    levels = { entry, sl, tp, rr: Number.isFinite(rr) ? rr : null };
   }
   return {
     score, bull, bear: 100 - bull, dir, signal, tfs, levels, primaryTf,

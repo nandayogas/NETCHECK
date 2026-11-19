@@ -102,6 +102,7 @@ export function ndaxPg(el) {
         ${lv('Stop Loss', r?.levels.sl, 'sell')}
         ${lv('Take Profit', r?.levels.tp, 'buy')}
       </div>
+      <div class="nx-mut nx-rr">Risk : Reward ${r?.levels.rr != null ? '1 : ' + r.levels.rr.toFixed(2) : '—'}</div>
     </section>
 
     <section class="nx-card">
