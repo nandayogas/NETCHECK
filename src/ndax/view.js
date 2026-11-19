@@ -53,6 +53,7 @@ export function ndaxPg(el) {
       <div class="nx-mh"><span>${esc(m.label)}</span><span class="${pos ? 'buy' : 'sell'}">${pos ? '+' : ''}${m.score.toFixed(2)}</span></div>
       <div class="nx-bar"><i class="${pos ? 'pos' : 'neg'}" style="width:${w}%;${pos ? 'left:50%' : 'right:50%'}"></i></div>
       <div class="nx-note">${esc(m.note)}${m.weight === 0 ? ' · filter' : ''}</div>
+      ${m.levels ? `<div class="nx-ml ${m.levels.dir === 'BUY' ? 'buy' : 'sell'}">${m.levels.dir} · Entry ${money(m.levels.entry, dpOf(st.price ?? 1))} · SL ${money(m.levels.sl, dpOf(st.price ?? 1))} · TP ${money(m.levels.tp, dpOf(st.price ?? 1))} · RR 1 : ${m.levels.rr.toFixed(2)}</div>` : ''}
     </div>`;
   };
 

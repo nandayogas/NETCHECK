@@ -28,9 +28,25 @@ export function analyzeTf(c, cfg) {
   const atrPct = ok(atrNow) ? atrNow / last.c * 100 : NaN;
   const out = [];
 
-  const add = (id, score, note) => {
+  const buf = ok(atrNow) ? 0.2 * atrNow : 0;
+  // Level per metode: entry = harga terakhir; SL dari titik struktur jika valid, else ATR; TP = jarak SL * rr.
+  const levelOf = (s, sl) => {
+    const d = sgn(s);
+    if (!d || !ok(atrNow) || !atrNow) return null;
+    let risk = atrNow * cfg.signal.atrSlMult;
+    let stop = last.c - d * risk;
+    if (ok(sl)) {
+      const r2 = (last.c - sl) * d;
+      if (r2 > 0) { stop = sl; risk = r2; }
+    }
+    const rr = cfg.signal.rr;
+    return { dir: d > 0 ? 'BUY' : 'SELL', entry: last.c, sl: stop, tp: last.c + d * risk * rr, rr };
+  };
+  const add = (id, score, note, slArg) => {
     if (!M[id].enabled) return;
-    out.push({ id, label: LABELS[id], score: clamp(score), weight: M[id].weight, note });
+    const sc = clamp(score);
+    const sl = typeof slArg === 'function' ? slArg(sc) : slArg;
+    out.push({ id, label: LABELS[id], score: sc, weight: M[id].weight, note, levels: levelOf(sc, sl) });
   };
 
   // EMA: posisi harga terhadap tiap EMA + susunan (cepat > menengah > lambat)
@@ -75,7 +91,7 @@ export function analyzeTf(c, cfg) {
       let s = ((last.c - S) / (R - S) * 2 - 1) * 0.6;
       if (R - last.c < 0.3 * a) s -= 0.4;
       if (last.c - S < 0.3 * a) s += 0.4;
-      add('sr', s, `Support ${fmtP(S)} · Resistance ${fmtP(R)}`);
+      add('sr', s, `Support ${fmtP(S)} · Resistance ${fmtP(R)}`, s >= 0 ? S - buf : R + buf);
     }
   }
 
@@ -114,9 +130,9 @@ export function analyzeTf(c, cfg) {
     if (H.length >= 2 && Lw.length >= 2) {
       const h1 = H.at(-1).p, h0 = H.at(-2).p, l1 = Lw.at(-1).p, l0 = Lw.at(-2).p;
       const up = h1 > h0 && l1 > l0, down = h1 < h0 && l1 < l0;
-      if (last.c > h1) add('structure', up ? 1 : 0.8, up ? 'BOS Bullish (lanjut naik)' : 'CHoCH Bullish (balik arah naik)');
-      else if (last.c < l1) add('structure', down ? -1 : -0.8, down ? 'BOS Bearish (lanjut turun)' : 'CHoCH Bearish (balik arah turun)');
-      else add('structure', up ? 0.3 : down ? -0.3 : 0, `Struktur ${up ? 'HH-HL' : down ? 'LH-LL' : 'campuran'}`);
+      if (last.c > h1) add('structure', up ? 1 : 0.8, up ? 'BOS Bullish (lanjut naik)' : 'CHoCH Bullish (balik arah naik)', l1 - buf);
+      else if (last.c < l1) add('structure', down ? -1 : -0.8, down ? 'BOS Bearish (lanjut turun)' : 'CHoCH Bearish (balik arah turun)', h1 + buf);
+      else add('structure', up ? 0.3 : down ? -0.3 : 0, `Struktur ${up ? 'HH-HL' : down ? 'LH-LL' : 'campuran'}`, up ? l1 - buf : h1 + buf);
     }
   }
 
@@ -124,8 +140,8 @@ export function analyzeTf(c, cfg) {
   {
     const win = c.slice(Math.max(0, n - M.liquidity.lookback), n);
     const hi = Math.max(...win.map(k => k.h)), lo = Math.min(...win.map(k => k.l));
-    if (last.h > hi && last.c < hi) add('liquidity', -1, `Sweep high ${fmtP(hi)}, close kembali di bawah`);
-    else if (last.l < lo && last.c > lo) add('liquidity', 1, `Sweep low ${fmtP(lo)}, close kembali di atas`);
+    if (last.h > hi && last.c < hi) add('liquidity', -1, `Sweep high ${fmtP(hi)}, close kembali di bawah`, last.h + buf);
+    else if (last.l < lo && last.c > lo) add('liquidity', 1, `Sweep low ${fmtP(lo)}, close kembali di atas`, last.l - buf);
     else add('liquidity', 0, 'Tidak ada sweep');
   }
 
@@ -142,6 +158,9 @@ export function analyzeTf(c, cfg) {
     const range = hi - lo;
     if (range > 0) {
       const up = loI < hiI;
+      // SL fibonacci: di bawah swing low untuk BUY, di atas swing high untuk SELL
+      const slF = s => (s > 0 ? lo - buf : hi + buf);
+      const addF = (id, sc, note) => add(id, sc, note, slF);
       const retr = up ? (hi - last.c) / range : (last.c - lo) / range;
       const pct = (retr * 100).toFixed(1);
       const near = F.levels.length
@@ -150,11 +169,11 @@ export function analyzeTf(c, cfg) {
       fib = {
         levels: F.levels.map(r => ({ ratio: r, price: up ? hi - range * r : lo + range * r })),
       };
-      if (retr < 0) add('fibonacci', up ? F.scoreBreakout : -F.scoreBreakout, 'Breakout di luar range');
+      if (retr < 0) addF('fibonacci', up ? F.scoreBreakout : -F.scoreBreakout, 'Breakout di luar range');
       else if (retr >= F.goldenMin && retr <= F.goldenMax)
-        add('fibonacci', up ? F.scoreGolden : -F.scoreGolden, `Golden zone ${pct}%${near != null ? ` (dekat ${(near * 100).toFixed(1)}%)` : ''}`);
-      else if (retr < F.goldenMin) add('fibonacci', up ? F.scoreShallow : -F.scoreShallow, `Koreksi dangkal ${pct}%`);
-      else add('fibonacci', up ? -F.scoreDeep : F.scoreDeep, `Koreksi dalam ${pct}%`);
+        addF('fibonacci', up ? F.scoreGolden : -F.scoreGolden, `Golden zone ${pct}%${near != null ? ` (dekat ${(near * 100).toFixed(1)}%)` : ''}`);
+      else if (retr < F.goldenMin) addF('fibonacci', up ? F.scoreShallow : -F.scoreShallow, `Koreksi dangkal ${pct}%`);
+      else addF('fibonacci', up ? -F.scoreDeep : F.scoreDeep, `Koreksi dalam ${pct}%`);
     }
   }
 
