@@ -1,13 +1,40 @@
-// Halaman FX NEWS INTELLIGENCE sebagai tile di Tools. Angka berita adalah contoh (lihat news.js).
-// Harga XAUUSD diperbarui setiap 5 detik. Grafik M15 diperbarui setiap 60 detik. Semua berhenti saat halaman ditutup.
+// Halaman FX NEWS INTELLIGENCE sebagai tile di Tools.
+// Harga XAUUSD diperbarui setiap 5 detik. Grafik M15 setiap 60 detik. Analisis setiap 30 detik.
+// Kalender ekonomi dibaca dari Worker (/api/news/calendar) setiap 15 menit. Semua berhenti saat halaman ditutup.
 import { newsPanelHtml } from './news.js';
 import { fetchPrice, fetchKlines } from './binance.js';
-import { mergeConfig, loadRemoteConfig } from './config.js';
+import { mergeConfig, loadRemoteConfig, NDAX_API } from './config.js';
 import { analyzeAll } from './analyzer.js';
 import { createChart, CrosshairMode } from 'lightweight-charts';
 import './ndax.css';
 
-const SYM = 'XAUUSDT', IV = '15m', LIMIT = 120, BASE = 'https://api.binance.com', AN_MS = 30000;
+const SYM = 'XAUUSDT', IV = '15m', LIMIT = 120, BASE = 'https://api.binance.com', AN_MS = 30000, CAL_MS = 15 * 60 * 1000;
+const WIB = 'Asia/Jakarta';
+const dayKey = d => d.toLocaleDateString('en-CA', { timeZone: WIB });
+
+// Ubah data feed ke format tampilan. Hanya hari ini dan besok (WIB) yang diambil, diurutkan menurut waktu.
+function mapCal(raw) {
+  const now = new Date();
+  const today = dayKey(now), tomorrow = dayKey(new Date(now.getTime() + 86400000));
+  return raw.map(x => {
+    const d = new Date(x.date);
+    if (isNaN(d)) return null;
+    const k = dayKey(d);
+    if (k !== today && k !== tomorrow) return null;
+    const imp = String(x.impact || '').toLowerCase();
+    return {
+      t: d.getTime(),
+      day: k === today ? 'Hari ini' : 'Besok',
+      time: d.toLocaleTimeString('en-GB', { timeZone: WIB, hour: '2-digit', minute: '2-digit' }),
+      country: x.country,
+      title: x.title,
+      impact: ['high', 'medium', 'low'].includes(imp) ? imp : 'none',
+      forecast: x.forecast,
+      previous: x.previous,
+      actual: x.actual,
+    };
+  }).filter(Boolean).sort((a, b) => a.t - b.t);
+}
 
 export function newsPg(el) {
   el.innerHTML = '<div class="nxm-page" id="nxm-root"></div>';
@@ -15,8 +42,9 @@ export function newsPg(el) {
   const alive = () => root.isConnected;
   const chartEl = document.createElement('div');
   chartEl.className = 'nxm-chart';
-  let chart = null, series = null, price = null, link = 'connecting', tPrice = null, tChart = null, tAn = null, ro = null;
+  let chart = null, series = null, price = null, link = 'connecting', tPrice = null, tChart = null, tAn = null, tCal = null, ro = null;
   let cfg = mergeConfig(null), analysis = null, updated = null;
+  let events = [], calOk = null;
 
   const ensureChart = () => {
     if (chart) return;
@@ -37,7 +65,7 @@ export function newsPg(el) {
   };
 
   const cleanup = () => {
-    clearTimeout(tPrice); clearTimeout(tChart); clearTimeout(tAn);
+    clearTimeout(tPrice); clearTimeout(tChart); clearTimeout(tAn); clearTimeout(tCal);
     if (ro) ro.disconnect();
     if (chart) chart.remove();
     chart = null; series = null; ro = null;
@@ -45,7 +73,7 @@ export function newsPg(el) {
 
   const draw = () => {
     if (!alive()) return;
-    root.innerHTML = newsPanelHtml({ price, link, analysis, updated });
+    root.innerHTML = newsPanelHtml({ price, link, analysis, updated, events, calOk });
     const slot = root.querySelector('#nxm-slot');
     if (slot) slot.appendChild(chartEl);
   };
@@ -85,9 +113,24 @@ export function newsPg(el) {
     tAn = setTimeout(tickAnalysis, AN_MS);
   };
 
+  // Kalender dari Worker. Jika gagal, data terakhir yang berhasil tetap ditampilkan dengan peringatan.
+  const tickCal = async () => {
+    if (!alive()) return cleanup();
+    try {
+      const r = await fetch(`${NDAX_API}/api/news/calendar`, { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      events = mapCal(Array.isArray(j.events) ? j.events : []);
+      calOk = true;
+    } catch { calOk = false; }
+    draw();
+    tCal = setTimeout(tickCal, CAL_MS);
+  };
+
   draw();
   tickPrice();
   tickChart();
   tickAnalysis();
+  tickCal();
   return cleanup;
 }

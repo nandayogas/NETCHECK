@@ -1,6 +1,26 @@
 // FX NEWS INTELLIGENCE. Hanya menampilkan data real yang tersedia.
-// Kalender dan berita belum terhubung, jadi bagian itu kosong sampai sumbernya ada.
+// Kalender berasal dari Worker (feed Fair Economy). Berita dan sumber fundamental lain belum terhubung.
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const IMP = { high: ['#ff4d5f', 'HIGH'], medium: ['#f5b942', 'MED'], low: ['#7e8ba1', 'LOW'], none: ['#4b5870', '—'] };
+
+// Daftar event kalender. Data yang kosong ditampilkan sebagai "—", tidak diisi angka.
+export function calendarHtml(events = []) {
+  if (!events.length) return '<div class="nxm-empty">Tidak ada event untuk hari ini dan besok. Kalender diperbarui otomatis setiap 15 menit.</div>';
+  return events.map(e => {
+    const [c, t] = IMP[e.impact] || IMP.none;
+    return `<div class="nxm-li" style="gap:8px">
+      <span style="min-width:64px"><b>${esc(e.time)}</b><br><small>${esc(e.day)} · ${esc(e.country)}</small></span>
+      <span style="flex:1"><b style="color:${c}">${t}</b> ${esc(e.title)}<br><small>F ${esc(e.forecast || '—')} · P ${esc(e.previous || '—')} · A ${esc(e.actual || '—')}</small></span>
+    </div>`;
+  }).join('');
+}
+
+// Dampak USD dari event USD hari ini yang berdampak tinggi. Tidak memberi arah, hanya jumlah event.
+export function usdImpact(events = []) {
+  const n = events.filter(e => e.country === 'USD' && e.day === 'Hari ini' && e.impact === 'high').length;
+  return n ? { label: `${n} event high impact hari ini`, hasHigh: true } : { label: 'Tidak ada event high impact hari ini', hasHigh: false };
+}
 
 // Status input berita. Hanya REAL bila sumbernya benar-benar terhubung.
 export function inputStatus({ events = [], fedText = null, usdSeries = null, geoNews = null, analysis = null } = {}) {
@@ -24,8 +44,10 @@ const wibShort = t => new Date(t ?? Date.now()).toLocaleString('id-ID', { timeZo
 const px = v => (v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const dirTone = d => (d === 'BULLISH' || d === 'BUY' ? 'buy' : d === 'BEARISH' || d === 'SELL' ? 'sell' : 'wait');
 
-export function newsPanelHtml({ price = null, link = 'connecting', analysis = null, updated = null, events = [] } = {}) {
+export function newsPanelHtml({ price = null, link = 'connecting', analysis = null, updated = null, events = [], usd = null, calOk = null } = {}) {
   const inputs = inputStatus({ events, analysis });
+  const usdInfo = usd || usdImpact(events);
+  const calWarn = calOk === false ? '<div class="nxm-empty">Feed kalender gagal dimuat. Menampilkan data terakhir yang berhasil.</div>' : '';
   const eng = engineStatus(inputs);
   const pill = { live: ['live', 'LIVE'], connecting: ['connecting', 'MENGHUBUNGKAN'], error: ['error', 'OFFLINE'] }[link] || ['error', 'OFFLINE'];
   const prim = analysis ? analysis.tfs[analysis.primaryTf] : null;
@@ -34,7 +56,7 @@ export function newsPanelHtml({ price = null, link = 'connecting', analysis = nu
     : [];
   return `
   <section class="nxm">
-    <div class="nxm-banner">ANALISIS TEKNIKAL REAL · KALENDER BERITA BELUM TERHUBUNG</div>
+    <div class="nxm-banner">ANALISIS TEKNIKAL REAL · ${events.length ? 'KALENDER EKONOMI REAL' : 'KALENDER BERITA BELUM TERHUBUNG'}</div>
 
     <header class="nxm-hd">
       <div class="nxm-title"><b>FX NEWS INTELLIGENCE</b><small>Smart News · Deep Analysis</small></div>
@@ -43,13 +65,13 @@ export function newsPanelHtml({ price = null, link = 'connecting', analysis = nu
 
     <div class="nxm-info">
       <div><small>Waktu WIB</small><b>${esc(wibShort())}</b></div>
-      <div><small>USD Impact</small><b class="wait">Belum ada</b></div>
+      <div><small>USD Impact</small><b class="${usdInfo.hasHigh ? 'sell' : 'wait'}">${esc(usdInfo.label)}</b></div>
       <div><small>XAUUSD</small><b>${px(price)}</b></div>
     </div>
 
     <div class="nxm-card">
-      <div class="nxm-h">Economic Calendar</div>
-      ${events.length ? '' : '<div class="nxm-empty">Belum ada sumber kalender terhubung. Data CPI, NFP, FOMC, PCE, GDP, dan PMI akan muncul setelah sumbernya dihubungkan.</div>'}
+      <div class="nxm-h">Economic Calendar <span class="nxm-tag low">HARI INI & BESOK · WIB</span></div>
+      ${calWarn}${calendarHtml(events)}
     </div>
 
     <div class="nxm-card">
@@ -68,7 +90,7 @@ export function newsPanelHtml({ price = null, link = 'connecting', analysis = nu
     </div>
 
     <div class="nxm-grid2">
-      <div class="nxm-card"><small>Dampak USD</small><b class="wait">Menunggu berita</b></div>
+      <div class="nxm-card"><small>Dampak USD</small><b class="${usdInfo.hasHigh ? 'sell' : 'wait'}">${esc(usdInfo.label)}</b></div>
       <div class="nxm-card"><small>Dampak XAUUSD</small><b class="${analysis ? dirTone(analysis.dir) : 'wait'}">${analysis ? esc(analysis.dir) : '—'}</b></div>
       <div class="nxm-card"><small>Kekuatan sinyal</small><b>${analysis ? analysis.strength + '%' : '—'}</b><div class="nxm-meter"><i style="width:${analysis ? analysis.strength : 0}%"></i></div></div>
       <div class="nxm-card"><small>Status mesin</small><b class="wait">${esc(eng.label)}</b></div>
