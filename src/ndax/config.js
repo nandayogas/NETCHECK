@@ -1,6 +1,6 @@
 // Konfigurasi NdaxTrade. Diatur dari aplikasi NdaxTrade Dev dan dibaca APK utama
 // dari API, sehingga perubahan berlaku tanpa mengubah source code atau build ulang.
-export const NDAX_API = 'https://ndaxtrade-api.nandayoga711.workers.dev/';
+export const NDAX_API = 'https://netcheck-api.nandayoga711.workers.dev/';
 const ready = () => !NDAX_API.includes('GANTI');
 
 export const TF_ORDER = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
