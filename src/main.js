@@ -7,6 +7,7 @@ import { I, logo, shell, tile, customTile, wordmarkInner, socialHtml } from './u
 import { wifiPg } from './wifi.js';
 import { ndaxPg } from './ndax/view.js';
 import { newsPg } from './ndax/news-page.js';
+import { eaPg } from './ea/view.js';
 import { accountHtml } from './auth.js';
 import { initGate } from './login.js';
 import './modules/live.js';
@@ -37,7 +38,7 @@ const enabled = k => cfg.features[k] !== false;
 
 // [kunci tool, segera hadir?]. Tool "segera" hanya tampilan, belum punya fungsi.
 const HOME_TOOLS = [['wifi'], ['speed'], ['ip'], ['news'], ['security'], ['ping']];
-const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi'], ['news'], ['security'], ['ndaxtrade'], ['ai', true]];
+const ALL_TOOLS = [['ping'], ['diag'], ['speed'], ['ip'], ['monitor'], ['device'], ['wifi'], ['news'], ['security'], ['ndaxtrade'], ['eabuilder'], ['ai', true]];
 const toolsHtml = list => list
   .filter(([k, soon]) => soon || enabled(k))
   .map(([k, soon]) => tile(k, !!soon)).join('');
@@ -89,7 +90,7 @@ async function route(animate = true) {
   document.documentElement.style.setProperty('--accent', cfg.accent || '#087CFF');
 
   let R = {
-    home, tools, history, settings, about, more: morePg, wifi: wifiPg, security: securityPg, ndaxtrade: ndaxPg, news: newsPg,
+    home, tools, history, settings, about, more: morePg, wifi: wifiPg, security: securityPg, ndaxtrade: ndaxPg, eabuilder: eaPg, news: newsPg,
     ping: pingPg, diag: diagPg, speed: speedPg, ip: ipPg, monitor: monitorPg, device: devicePg,
   }[p];
   if (!R && p.startsWith('t/')) {

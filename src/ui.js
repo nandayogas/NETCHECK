@@ -138,6 +138,7 @@ const wordmark = () => `<span class="wm">${wordmarkInner('NETCHECK')}</span>`;
 export const TOOL_DEFS = {
   ping: { name: 'Ping Test', icon: I.pulse },
   ndaxtrade: { name: 'NdaxTrade', icon: I.signal },
+  eabuilder: { name: 'EA Builder', icon: svg('<path d="M8 6L3 12l5 6M16 6l5 6-5 6M13.5 4l-3 16"/>') },
   diag: { name: 'Cek Jaringan', icon: I.diag },
   speed: { name: 'Speed Test', icon: I.speed },
   ip: { name: 'IP Checker', icon: I.ip },

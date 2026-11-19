@@ -50,3 +50,12 @@ Buat modul baru, daftarkan di `REGISTRY` pada `src/modules/more.js` dengan kunci
 - **Live Streaming:** ada di slot 1 "Fitur Lainnya". Ubah nama slot 1 menjadi "Live Streaming" di panel admin.
 - **Aturan Firestore:** tempel ulang `firestore.rules` di tab Rules (aturan lama tetap, ditambah blok `live`).
 - Sinyal WebRTC memakai STUN Google. Koneksi antarjaringan (mis. 4G ke WiFi) bisa gagal di beberapa operator tanpa server TURN.
+
+## 7. NETCHECK EA BUILDER (Tools > EA Builder)
+Membuat Expert Advisor MT5 (XAUUSD, BUY/SELL otomatis) dari mesin analisis NetCheck.
+- **Strategi:** timeframe, bobot, ambang sinyal, dan metode dibaca dari konfigurasi NetCheck/NdaxTrade (`src/ndax/`), tidak diubah.
+- **Risiko:** lot tetap atau % risiko, SL (ATR), TP (RR), trailing stop, maksimal posisi, jeda entri, spread.
+- **Backtest:** memakai `analyzeAll()` yang sama pada data Binance (XAUUSDT sebagai proxy emas). Timeframe lebih kecil dari timeframe utama tidak ikut backtest.
+- **AI Strategy Generator:** optimasi ambang/SL/RR lewat backtest, dengan data uji terpisah (70/30).
+- **Kode & EX5:** unduh `.mq5` dan skrip `compile_*.bat`. EX5 hanya bisa dibuat MetaEditor (Windows/Winlator); opsional isi URL layanan compile HTTPS (POST `{filename, source}` -> EX5 biner atau `{ex5: base64, log}`).
+- Kode ada di `src/ea/` (`mql.js` generator, `engine.js` backtest, `view.js` dashboard). Dependensi baru: `@capacitor/filesystem` dan `@capacitor/share` (untuk menyimpan/membagikan file di Android). Jalankan `npm install` lagi.
