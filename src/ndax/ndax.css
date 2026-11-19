@@ -117,3 +117,17 @@
 .nx-full{margin-top:10px}
 .nx-foot{padding-bottom:4px}
 @media (max-width:360px){.nx-setups{grid-template-columns:1fr}.nx-mcs{grid-template-columns:1fr}}
+
+/* FX News Intelligence (kerangka) */
+.nx-news .nx-badge{font-size:10px;color:var(--wait);border-color:var(--wait)}
+.nx-engine{border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px;background:var(--card2)}
+.nx-engine b{display:block;font-size:13px}
+.nx-engine small{color:var(--mut);font-size:11px}
+.nx-inrow{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:6px 0;border-top:1px solid var(--line)}
+.nx-inrow b{font-size:11px}
+.nx-ev{border-top:1px solid var(--line);padding:8px 0}
+.nx-evh{display:flex;justify-content:space-between;font-size:13px;font-weight:700}
+.nx-imp{font-size:10px;padding:2px 6px;border-radius:99px;border:1px solid var(--gold);color:var(--gold)}
+.nx-imp.high{border-color:var(--sell);color:var(--sell)}
+.nx-evv{display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin-top:4px}
+.nx-evv b{color:var(--txt)}
