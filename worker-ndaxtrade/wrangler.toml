@@ -1,7 +1,0 @@
-name = "ndaxtrade-api"
-main = "index.js"
-compatibility_date = "2024-09-01"
-
-[[kv_namespaces]]
-binding = "NDAX_CFG"
-id = "GANTI_KV_ID"   # isi dari: npx wrangler kv namespace create NDAX_CFG

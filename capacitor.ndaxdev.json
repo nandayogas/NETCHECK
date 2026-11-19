@@ -1,7 +1,0 @@
-{
-  "appId": "com.netcheck.ndaxtrade.dev",
-  "appName": "NdaxTrade Dev",
-  "webDir": "dist-ndaxdev",
-  "backgroundColor": "#0b0f17",
-  "android": { "allowMixedContent": false }
-}

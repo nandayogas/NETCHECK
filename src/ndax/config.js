@@ -1,6 +1,6 @@
 // Konfigurasi NdaxTrade. Diatur dari aplikasi NdaxTrade Dev dan dibaca APK utama
 // dari API, sehingga perubahan berlaku tanpa mengubah source code atau build ulang.
-export const NDAX_API = 'https://netcheck-api.nandayoga711.workers.dev/';
+export const NDAX_API = 'https://netcheck-api.nandayoga711.workers.dev';
 const ready = () => !NDAX_API.includes('GANTI');
 
 export const TF_ORDER = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
@@ -67,7 +67,7 @@ export function mergeConfig(r) {
 export async function loadRemoteConfig() {
   if (!ready()) return null;
   try {
-    const r = await fetch(`${NDAX_API}/api/config`, { cache: 'no-store' });
+    const r = await fetch(`${NDAX_API}/api/ndax/config`, { cache: 'no-store' });
     if (!r.ok) return null;
     return mergeConfig(await r.json());
   } catch {
@@ -77,7 +77,7 @@ export async function loadRemoteConfig() {
 
 export async function saveRemoteConfig(cfg, token) {
   if (!ready()) throw new Error('NDAX_API belum diisi di src/ndax/config.js');
-  const r = await fetch(`${NDAX_API}/api/config`, {
+  const r = await fetch(`${NDAX_API}/api/ndax/config`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'X-Dev-Token': token },
     body: JSON.stringify(cfg),
