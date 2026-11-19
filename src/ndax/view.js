@@ -5,6 +5,13 @@ import { analyzeAll, fmtP } from './analyzer.js';
 import './ndax.css';
 
 const CACHE_KEY = 'ndax.cfg';
+const SYM_KEY = 'ndax.sym';
+// Pasar yang bisa dipilih di halaman. XAUUSDT = emas (Binance Futures), PAXGUSDT = token emas di spot.
+const MARKETS = [
+  { sym: 'BTCUSDT',  label: 'BTC' },
+  { sym: 'XAUUSDT',  label: 'XAU/USD' },
+  { sym: 'PAXGUSDT', label: 'XAU (PAXG)' },
+];
 let session = 0;
 
 const readCache = () => {
@@ -21,6 +28,7 @@ const LINK = { connecting: 'MENGHUBUNGKAN', live: 'LIVE', error: 'OFFLINE' };
 export function ndaxPg(el) {
   const id = ++session;               // sesi baru membatalkan loop sesi lama
   let cfg = readCache();
+  let sym = (() => { try { return localStorage.getItem(SYM_KEY); } catch { return null; } })() || cfg.market.symbol;
   const st = { price: null, link: 'connecting', err: '', result: null, updated: null, sel: null };
 
   el.innerHTML = '<div class="nx" id="nx"></div>';
@@ -56,11 +64,14 @@ export function ndaxPg(el) {
     return `
     <header class="nx-top">
       <div>
-        <div class="nx-sym">${esc(cfg.market.symbol)} · NdaxTrade</div>
+        <div class="nx-sym">${esc(sym)} · NdaxTrade</div>
         <div class="nx-price">${money(st.price, d)}</div>
       </div>
       <span class="nx-pill ${st.link}">${LINK[st.link]}</span>
     </header>
+
+    <div class="nx-mk">${MARKETS.map(m =>
+      `<button class="nx-chip${sym === m.sym ? ' on' : ''}" data-sym="${m.sym}">${m.label}</button>`).join('')}</div>
 
     <section class="nx-card">
       <div class="nx-sigrow">
@@ -95,6 +106,14 @@ export function ndaxPg(el) {
 
   const draw = () => { if (alive()) root.innerHTML = view(); };
   root.addEventListener('click', e => {
+    const m = e.target.closest('[data-sym]');
+    if (m && m.dataset.sym !== sym) {
+      sym = m.dataset.sym;
+      try { localStorage.setItem(SYM_KEY, sym); } catch { /* abaikan */ }
+      Object.assign(st, { price: null, link: 'connecting', err: '', result: null, updated: null });
+      draw(); doPrice(); doAnalysis();
+      return;
+    }
     const b = e.target.closest('[data-tf]');
     if (b) { st.sel = b.dataset.tf; draw(); }
   });
@@ -113,23 +132,35 @@ export function ndaxPg(el) {
     if (r) { cfg = r; localStorage.setItem(CACHE_KEY, JSON.stringify(r)); }
   }, () => 30000);
 
-  loop(async () => {
-    try { st.price = await fetchPrice(cfg.market.baseUrl, cfg.market.symbol); st.link = 'live'; st.err = ''; }
-    catch (e) { st.link = 'error'; st.err = e.message; }
+  async function doPrice() {
+    const mine = sym;
+    try {
+      const v = await fetchPrice(cfg.market.baseUrl, mine);
+      if (mine !== sym) return;
+      st.price = v; st.link = 'live'; st.err = '';
+    } catch (e) {
+      if (mine !== sym) return;
+      st.link = 'error'; st.err = e.message;
+    }
     draw();
-  }, () => cfg.market.priceRefreshSec * 1000);
+  }
 
-  loop(async () => {
+  async function doAnalysis() {
+    const mine = sym;
     const data = {}, errs = [];
     await Promise.all(Object.entries(cfg.timeframes).filter(([, t]) => t.enabled).map(async ([tf, t]) => {
-      try { data[tf] = await fetchKlines(cfg.market.baseUrl, cfg.market.symbol, t.interval, cfg.market.candles); }
+      try { data[tf] = await fetchKlines(cfg.market.baseUrl, mine, t.interval, cfg.market.candles); }
       catch (e) { errs.push(`${tf}: ${e.message}`); }
     }));
+    if (mine !== sym) return;
     const r = analyzeAll(data, cfg);
     if (r) { st.result = r; st.updated = Date.now(); }
     st.err = errs.join(' · ');
     draw();
-  }, () => cfg.market.analysisRefreshSec * 1000);
+  }
+
+  loop(doPrice, () => cfg.market.priceRefreshSec * 1000);
+  loop(doAnalysis, () => cfg.market.analysisRefreshSec * 1000);
 
   draw();
 }
