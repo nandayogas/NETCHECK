@@ -2,6 +2,7 @@
 import { mergeConfig, TF_ORDER, loadRemoteConfig } from './config.js';
 import { fetchKlines, fetchPrice, openStream, toCandle } from './binance.js';
 import { analyzeAll, fmtP } from './analyzer.js';
+import { newsPanelHtml } from './news.js';
 import { createChart, CrosshairMode } from 'lightweight-charts';
 import './ndax.css';
 
@@ -34,7 +35,7 @@ export function ndaxPg(el) {
   const id = ++session;               // sesi baru membatalkan loop sesi lama
   let cfg = readCache();
   let sym = (() => { try { return localStorage.getItem(SYM_KEY); } catch { return null; } })() || cfg.market.symbol;
-  const st = { price: null, link: 'connecting', err: '', result: null, updated: null, sel: null, more: false };
+  const st = { price: null, link: 'connecting', err: '', result: null, updated: null, sel: null, more: false, news: false };
 
   let streams = [];                   // fungsi penutup untuk stream WebSocket
   let chart = null, series = null, levelLines = [];
@@ -114,7 +115,8 @@ export function ndaxPg(el) {
     return `
     <header class="nx-top">
       <div class="nx-brand"><span class="nx-logo">◆</span><div><b>NDAXTRADE</b><small>Smart Market Analysis</small></div></div>
-      <span class="nx-pill ${st.link}">${LINK[st.link]}</span>
+      <div class="nx-hr"><button class="nx-toggle" data-act="news">${st.news ? 'Tutup News' : 'FX News'}</button>
+      <span class="nx-pill ${st.link}">${LINK[st.link]}</span></div>
     </header>
 
     <section class="nx-card nx-hero">
@@ -156,6 +158,8 @@ export function ndaxPg(el) {
         ? `<button class="nx-mc nx-more" data-act="more"><b>+${ms.length - 4}</b><span>lainnya</span></button>` : ''}</div>
       ${st.more ? `<div class="nx-full">${ms.length ? ms.map(row).join('') : '<div class="nx-mut">Menunggu data pasar…</div>'}${fibHtml}</div>` : ''}
     </section>
+
+    ${st.news ? newsPanelHtml({ price: st.price, link: st.link }) : ''}
 
     <footer class="nx-foot">Update ${st.updated ? new Date(st.updated).toLocaleTimeString('id-ID') : '—'}${st.err ? ' · ' + esc(st.err) : ''}</footer>`;
   };
@@ -234,10 +238,10 @@ export function ndaxPg(el) {
     streams.forEach(close => close());
     streams = [];
     const s = sym, tf = chartTf(), iv = intervalOf(tf);
-    streams.push(openStream(s, 'trade', m => {
+    streams.push(openStream(s, 'bookTicker', m => {
       if (!alive()) return stopAll();
-      if (s !== sym || m.p == null) return;
-      st.price = +m.p; st.link = 'live'; st.err = '';
+      if (s !== sym || m.b == null || m.a == null) return;
+      st.price = (+m.b + +m.a) / 2; st.link = 'live'; st.err = '';
       updatePrice();
     }, () => {}));
     streams.push(openStream(s, `kline_${iv}`, m => {
@@ -264,6 +268,7 @@ export function ndaxPg(el) {
       return;
     }
     if (e.target.closest('[data-act="more"]')) { st.more = !st.more; draw(); return; }
+    if (e.target.closest('[data-act="news"]')) { st.news = !st.news; draw(); return; }
     const b = e.target.closest('[data-tf]');
     if (b) {
       st.sel = b.dataset.tf;
