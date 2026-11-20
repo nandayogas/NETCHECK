@@ -88,7 +88,7 @@ export function buildMql5(s, cfg) {
   return `//+------------------------------------------------------------------+
 //| ${name}.mq5                                                       
 //| Dibuat oleh NETCHECK EA BUILDER — strategi = mesin analisis NetCheck
-//| Instrumen: ${s.symbol} · Mode: ${({ scalp: 'SCALPING', fast: 'FAST SIGNAL CONSERVATIVE' })[s.mode] || 'SWING'} · MetaTrader 5 (kompatibel Winlator)
+//| Instrumen: ${s.symbol} · Mode: ${({ scalp: 'SCALPING', fast: 'FAST SIGNAL CONSERVATIVE', straddle: 'STOP ORDER STRADDLE' })[s.mode] || 'SWING'} · MetaTrader 5 (kompatibel Winlator)
 //| PERINGATAN: trading berisiko. Uji di akun demo / Strategy Tester dulu.
 //+------------------------------------------------------------------+
 #property copyright "NETCHECK"
@@ -130,6 +130,9 @@ input int    InpCooldown   = ${n(s.cooldown)};        // Jeda minimal antar entr
 input bool   InpCloseOpp   = ${b(s.closeOpposite)};   // Tutup posisi lawan saat sinyal berbalik
 input int    InpMaxSpread  = ${n(s.maxSpread)};      // Spread maksimum (points), 0 = tanpa batas
 input int    InpSlippage   = ${n(s.slippage)};       // Slippage (points)
+input bool   InpStraddle   = ${s.mode === 'straddle' ? 'true' : 'false'};   // Mode Stop Order Straddle (BUY STOP + SELL STOP)
+input double InpStopOffAtr = ${n(s.stopOff ?? 0.5)};      // Jarak pending dari harga = ATR x nilai ini
+input int    InpExpiryBars = ${n(s.expiry ?? 5)};         // Pending kedaluwarsa setelah sekian bar
 
 //--- Parameter metode (default dari konfigurasi NetCheck)
 input bool   InpEMA_On = ${b(M.ema.enabled)};     input double InpEMA_W = ${n(M.ema.weight)};
@@ -542,6 +545,77 @@ void ManageTrailing()
    }
 }
 
+//--- Stop Order Straddle: BUY STOP di atas dan SELL STOP di bawah harga (OCO)
+double StraddleAtr()
+{
+   MqlRates r[];
+   ArraySetAsSeries(r, false);
+   int got = CopyRates(g_sym, InpPrimaryTf, 1, InpCandles, r);
+   if(got < InpATR_P + 2) return NA;
+   double a[]; CalcAtr(r, InpATR_P, a);
+   return a[got - 1];
+}
+
+int CountPending()
+{
+   int c = 0;
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+   {
+      ulong tk = OrderGetTicket(i);
+      if(tk == 0) continue;
+      if(OrderGetString(ORDER_SYMBOL) == g_sym && OrderGetInteger(ORDER_MAGIC) == InpMagic) c++;
+   }
+   return c;
+}
+
+void CancelPending()
+{
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+   {
+      ulong tk = OrderGetTicket(i);
+      if(tk == 0) continue;
+      if(OrderGetString(ORDER_SYMBOL) == g_sym && OrderGetInteger(ORDER_MAGIC) == InpMagic) trade.OrderDelete(tk);
+   }
+}
+
+void StraddleTick()
+{
+   ManageTrailing();
+   // OCO: begitu salah satu sisi terisi, sisi lain dibatalkan
+   if(CountPos() > 0)
+   {
+      CancelPending();
+      g_lastEntry = iTime(g_sym, InpPrimaryTf, 0);
+      return;
+   }
+   datetime bt = iTime(g_sym, InpPrimaryTf, 0);
+   if(bt == 0 || bt == g_lastBar) return;      // pasang pending sekali per bar baru
+   g_lastBar = bt;
+   if(!InSession()) { CancelPending(); return; }
+   if(CountPending() > 0) return;              // kedua sisi masih menunggu; kedaluwarsa diatur waktu
+   int secs = PeriodSeconds(InpPrimaryTf);
+   if(g_lastEntry > 0 && secs > 0 && (bt - g_lastEntry) / secs < InpCooldown) return;
+   if(InpMaxSpread > 0)
+   {
+      double sp = (SymbolInfoDouble(g_sym, SYMBOL_ASK) - SymbolInfoDouble(g_sym, SYMBOL_BID)) / SymbolInfoDouble(g_sym, SYMBOL_POINT);
+      if(sp > InpMaxSpread) return;
+   }
+   double atr = StraddleAtr();
+   if(!Ok(atr) || atr <= 0) return;
+   int digits = (int)SymbolInfoInteger(g_sym, SYMBOL_DIGITS);
+   double pt = SymbolInfoDouble(g_sym, SYMBOL_POINT);
+   double minDist = (double)SymbolInfoInteger(g_sym, SYMBOL_TRADE_STOPS_LEVEL) * pt;
+   double off  = MathMax(atr * InpStopOffAtr, minDist + pt);
+   double risk = MathMax(atr * InpSlAtrMult, minDist + pt);
+   double ask = SymbolInfoDouble(g_sym, SYMBOL_ASK), bid = SymbolInfoDouble(g_sym, SYMBOL_BID);
+   double buyP  = NormalizeDouble(ask + off, digits);
+   double sellP = NormalizeDouble(bid - off, digits);
+   double lots = CalcLots(risk);
+   datetime exp = bt + (datetime)(InpExpiryBars * secs);
+   trade.BuyStop(lots, buyP, g_sym, NormalizeDouble(buyP - risk, digits), NormalizeDouble(buyP + risk * InpRR, digits), ORDER_TIME_SPECIFIED, exp, InpComment);
+   trade.SellStop(lots, sellP, g_sym, NormalizeDouble(sellP + risk, digits), NormalizeDouble(sellP - risk * InpRR, digits), ORDER_TIME_SPECIFIED, exp, InpComment);
+}
+
 //--- Event handler
 int OnInit()
 {
@@ -557,6 +631,7 @@ ${TF_ORDER.map((k, i) => `   g_tfOn[${i}] = InpTF_${k}; g_tfW[${i}] = InpW_${k};
 
 void OnTick()
 {
+   if(InpStraddle) { StraddleTick(); return; }
    ManageTrailing();
    datetime bt = iTime(g_sym, InpPrimaryTf, 0);
    if(bt == 0 || bt == g_lastBar) return;      // analisis sekali per bar baru

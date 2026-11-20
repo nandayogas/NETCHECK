@@ -43,8 +43,8 @@ export function defaultsFromNetcheck(cfg = cfgFromCache()) {
 
 // ---------- Mode Swing / Scalping ----------
 // Setiap mode punya set pengaturannya sendiri. Berpindah mode menyimpan set aktif lalu memuat set tujuan.
-export const MODE_FIELDS = ['primaryTf', 'tfs', 'threshold', 'slAtr', 'rr', 'cooldown', 'maxPos', 'maxSpread', 'trail', 'closeOpposite', 'session'];
-const clone = v => JSON.parse(JSON.stringify(v));
+export const MODE_FIELDS = ['primaryTf', 'tfs', 'threshold', 'slAtr', 'rr', 'cooldown', 'maxPos', 'maxSpread', 'trail', 'closeOpposite', 'session', 'stopOff', 'expiry'];
+const clone = v => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const pickMode = s => Object.fromEntries(MODE_FIELDS.map(k => [k, clone(s[k])]));
 
 // Preset scalping: M5 sebagai acuan, timeframe lebih rendah ikut, SL ketat, RR kecil, sesi aktif.
@@ -72,13 +72,30 @@ export function fastPreset(s) {
   return pickMode(t);
 }
 
+// Preset Stop Order Straddle: BUY STOP di atas dan SELL STOP di bawah harga, dipasang bersamaan.
+// Sisi yang terisi membatalkan sisi lain (OCO). Hanya satu siklus pada satu waktu.
+// stopOff = jarak pending dari harga (x ATR), expiry = masa berlaku pending (bar).
+export const STRADDLE_TFS = { M1: 1.0 };
+export function straddlePreset(s) {
+  const t = {
+    ...s, primaryTf: 'M1', threshold: 0, slAtr: 1.0, rr: 1.0, cooldown: 1, maxPos: 1, maxSpread: 20,
+    stopOff: 0.5, expiry: 5,
+    trail: { on: true, atrMult: 0.6, startRR: 0.5 }, closeOpposite: false, session: { on: true, start: 7, end: 20 },
+  };
+  t.tfs = {};
+  for (const k of TF_ORDER) t.tfs[k] = { on: k in STRADDLE_TFS, weight: STRADDLE_TFS[k] ?? s.tfs[k].weight };
+  return pickMode(t);
+}
+
 // Preset per mode selain swing (yang memakai pengaturan NetCheck).
-export const PRESETS = { scalp: scalpPreset, fast: fastPreset };
-export const MODES = ['swing', 'scalp', 'fast'];
+export const PRESETS = { scalp: scalpPreset, fast: fastPreset, straddle: straddlePreset };
+export const MODES = ['swing', 'scalp', 'fast', 'straddle'];
 
 // Pastikan semua set mode ada. Dipanggil saat memuat pengaturan.
 export function ensureModes(s) {
   if (!s.session) s.session = { on: false, start: 7, end: 20 };
+  if (s.stopOff == null) s.stopOff = 0.5;
+  if (s.expiry == null) s.expiry = 5;
   if (!s.modes) {
     s.mode = 'swing';
     s.modes = { swing: pickMode(s) };

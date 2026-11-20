@@ -7,7 +7,7 @@ import { analyzeAll, LABELS, fmtP } from '../ndax/analyzer.js';
 import { defaultsFromNetcheck, cfgFromCache, analysisCfg, fetchHistory, loadData, precompute, simulate, optimize, btTfs, DATA_SYMBOLS, ensureModes, switchMode, scalpPreset, fastPreset, gridSize, GRIDS } from './engine.js';
 
 // Label per mode untuk tampilan (kunci sama dengan S.mode).
-const MODE_NAME = { swing: 'Swing', scalp: 'Scalping', fast: 'Fast Signal Conservative' };
+const MODE_NAME = { swing: 'Swing', scalp: 'Scalping', fast: 'Fast Signal Conservative', straddle: 'Stop Order Straddle' };
 const MODE_GRID = { swing: 'Swing', scalp: 'scalping', fast: 'fast signal conservative' };
 import { buildMql5, precheck, compileBat, fileBase } from './mql.js';
 import './ea.css';
@@ -98,11 +98,14 @@ export function eaPg(el) {
         <button type="button" data-mode="swing" class="${S.mode === 'swing' ? 'on' : ''}" aria-pressed="${S.mode === 'swing'}">Swing<small>Trade jarang, sinyal kuat</small></button>
         <button type="button" data-mode="scalp" class="${S.mode === 'scalp' ? 'on' : ''}" aria-pressed="${S.mode === 'scalp'}">Scalping<small>Trade sering, SL ketat</small></button>
         <button type="button" data-mode="fast" class="${S.mode === 'fast' ? 'on' : ''}" aria-pressed="${S.mode === 'fast'}">Fast Signal Conservative<small>Sinyal cepat, ambang ketat, 1 posisi</small></button>
+        <button type="button" data-mode="straddle" class="${S.mode === 'straddle' ? 'on' : ''}" aria-pressed="${S.mode === 'straddle'}">Stop Order Straddle<small>BUY STOP + SELL STOP, SL ATR</small></button>
       </div>
       ${S.mode === 'scalp'
         ? `<p class="ea-hint">Preset scalping: timeframe utama ${sp.primaryTf}, SL ${dec(sp.slAtr)}×ATR, RR ${dec(sp.rr)}, jeda ${sp.cooldown} bar, maks ${sp.maxPos} posisi, spread maks ${sp.maxSpread} point, dan entri hanya di jam sesi (UTC). Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Hasil scalping sangat peka terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
         : S.mode === 'fast'
           ? `<p class="ea-hint">Preset Fast Signal Conservative: timeframe utama ${fp.primaryTf}, ambang sinyal ${dec(fp.threshold)} (lebih ketat dari scalping), SL ${dec(fp.slAtr)}×ATR, RR ${dec(fp.rr)}, jeda ${fp.cooldown} bar, maks ${fp.maxPos} posisi, spread maks ${fp.maxSpread} point, dan entri hanya di jam sesi (UTC). Timeframe M30 dan H1 ikut sebagai konfirmasi. Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Sinyal lebih jarang daripada scalping, tetapi tetap sensitif terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
+          : S.mode === 'straddle'
+          ? `<p class="ea-hint">Preset Stop Order Straddle: BUY STOP di atas dan SELL STOP di bawah harga, berjarak ${dec(S.stopOff)}×ATR, SL ${dec(S.slAtr)}×ATR, RR ${dec(S.rr)}, pending kedaluwarsa setelah ${S.expiry} bar, dan maks ${S.maxPos} siklus. Begitu satu sisi terisi, sisi lain dibatalkan. Mode ini belum punya backtest di aplikasi, jadi uji di MT5 Strategy Tester dan akun demo dulu.</p>`
           : `<p class="ea-hint">Mode swing memakai pengaturan NetCheck. Pengaturan scalping dan fast signal tersimpan terpisah dan tidak ikut berubah saat Anda kembali ke sini.</p>`}
     </section>`;
     const tfRows = TF_ORDER.map(k => `<div class="ea-tfrow">
@@ -146,7 +149,14 @@ export function eaPg(el) {
   };
 
   // ---------- tab Risiko ----------
-  const tabRisiko = () => `
+  const tabRisiko = () => `${S.mode === 'straddle' ? `
+    <section class="ea-card">
+      <h3>Stop Order Straddle</h3>
+      <div class="ea-grid2">
+        ${f('Jarak pending (×ATR)', 'stopOff', { step: 0.1, min: 0 })}
+        ${f('Kedaluwarsa (bar)', 'expiry', { step: 1, min: 1 })}
+      </div>
+    </section>` : ''}
     <section class="ea-card">
       <h3>Ukuran posisi</h3>
       <div class="ea-grid2">
@@ -215,6 +225,7 @@ export function eaPg(el) {
       <div><small>Rata-rata kalah</small><b class="sell">${num(r.avgLoss)}</b></div>
     </div>`;
   const tabBacktest = () => {
+    if (S.mode === 'straddle') return `<section class="ea-card"><h3>Backtest tidak tersedia</h3><p class="ea-hint">Mode Stop Order Straddle belum punya simulator di aplikasi. Uji di MT5 Strategy Tester (model Every tick based on real ticks) dengan pengaturan dari halaman ini.</p></section>`;
     const tfs = btTfs(S), skipped = TF_ORDER.filter(k => S.tfs[k].on && !tfs.includes(k));
     const b = st.bt;
     const o = st.opt;
@@ -351,6 +362,7 @@ export function eaPg(el) {
       if (!r) throw new Error('Data belum cukup untuk dianalisis');
       st.live = r;
     });
+    if ((a === 'bt' || a === 'opt') && S.mode === 'straddle') { st.err = 'Backtest dan optimasi belum tersedia untuk Stop Order Straddle. Uji di MT5 Strategy Tester.'; return render(); }
     if (a === 'bt') return run('bt', async () => {
       const series = await ensureSeries();
       st.bt = simulate(series, S);
