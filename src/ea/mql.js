@@ -133,6 +133,9 @@ input int    InpSlippage   = ${n(s.slippage)};       // Slippage (points)
 input bool   InpStraddle   = ${(s.mode === 'straddle' || s.useAnalysis === false) ? 'true' : 'false'};   // Mode Stop Order Straddle (BUY STOP + SELL STOP)
 input double InpStopOffAtr = ${n(s.stopOff ?? 0.5)};      // Jarak pending dari harga = ATR x nilai ini
 input int    InpExpiryBars = ${n(s.expiry ?? 5)};         // Pending kedaluwarsa setelah sekian bar
+input bool   InpBeOn       = ${b((s.be || {}).on ?? true)};         // Break-even: pindahkan SL ke impas
+input double InpBeStart    = ${n((s.be || {}).start ?? 1)};        // Break-even mulai saat profit >= nilai ini x risiko awal
+input int    InpBeBuffer   = ${n((s.be || {}).buffer ?? 2)};        // Buffer di atas/bawah harga entri (points)
 
 //--- Parameter metode (default dari konfigurasi NetCheck)
 input bool   InpEMA_On = ${b(M.ema.enabled)};     input double InpEMA_W = ${n(M.ema.weight)};
@@ -545,6 +548,41 @@ void ManageTrailing()
    }
 }
 
+//--- Break-even: SL dipindah ke harga entri (+ buffer) setelah profit mencapai InpBeStart x risiko awal
+// Risiko awal diambil dari jarak TP: TP = entri +/- risiko x InpRR.
+void ManageBreakEven()
+{
+   if(!InpBeOn || InpRR <= 0) return;
+   int digits = (int)SymbolInfoInteger(g_sym, SYMBOL_DIGITS);
+   double pt = SymbolInfoDouble(g_sym, SYMBOL_POINT);
+   double minDist = (double)SymbolInfoInteger(g_sym, SYMBOL_TRADE_STOPS_LEVEL) * pt;
+   double bid = SymbolInfoDouble(g_sym, SYMBOL_BID), ask = SymbolInfoDouble(g_sym, SYMBOL_ASK);
+   double buf = InpBeBuffer * pt;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong tk = PositionGetTicket(i);
+      if(tk == 0) continue;
+      if(PositionGetString(POSITION_SYMBOL) != g_sym || PositionGetInteger(POSITION_MAGIC) != InpMagic) continue;
+      long type = PositionGetInteger(POSITION_TYPE);
+      double op = PositionGetDouble(POSITION_PRICE_OPEN), sl = PositionGetDouble(POSITION_SL), tp = PositionGetDouble(POSITION_TP);
+      if(tp == 0) continue;
+      double risk = MathAbs(tp - op) / InpRR;
+      if(risk <= 0) continue;
+      if(type == POSITION_TYPE_BUY)
+      {
+         if(bid - op < InpBeStart * risk) continue;
+         double nsl = NormalizeDouble(op + buf, digits);
+         if((sl == 0 || nsl > sl + pt) && bid - nsl >= minDist) trade.PositionModify(tk, nsl, tp);
+      }
+      else if(type == POSITION_TYPE_SELL)
+      {
+         if(op - ask < InpBeStart * risk) continue;
+         double nsl = NormalizeDouble(op - buf, digits);
+         if((sl == 0 || nsl < sl - pt) && nsl - ask >= minDist) trade.PositionModify(tk, nsl, tp);
+      }
+   }
+}
+
 //--- Stop Order Straddle: BUY STOP di atas dan SELL STOP di bawah harga (OCO)
 double StraddleAtr()
 {
@@ -580,6 +618,7 @@ void CancelPending()
 
 void StraddleTick()
 {
+   ManageBreakEven();
    ManageTrailing();
    // OCO: begitu salah satu sisi terisi, sisi lain dibatalkan
    if(CountPos() > 0)
@@ -632,6 +671,7 @@ ${TF_ORDER.map((k, i) => `   g_tfOn[${i}] = InpTF_${k}; g_tfW[${i}] = InpW_${k};
 void OnTick()
 {
    if(InpStraddle) { StraddleTick(); return; }
+   ManageBreakEven();
    ManageTrailing();
    datetime bt = iTime(g_sym, InpPrimaryTf, 0);
    if(bt == 0 || bt == g_lastBar) return;      // analisis sekali per bar baru

@@ -163,6 +163,15 @@ export function eaPg(el) {
       </div>
     </section>` : ''}
     <section class="ea-card">
+      <h3>Break-even (SL ke impas)</h3>
+      <div class="ea-grid2">
+        ${f('Aktifkan break-even', 'be.on', { type: 'check' })}
+        ${f('Mulai saat profit (× risiko)', 'be.start', { step: 0.1, min: 0 })}
+        ${f('Buffer (points)', 'be.buffer', { step: 1, min: 0 })}
+      </div>
+      <p class="ea-hint">Setelah profit mencapai nilai di atas, SL dipindah ke harga entri plus buffer. Kalau trailing stop juga aktif, SL hanya naik, tidak pernah turun.</p>
+    </section>
+    <section class="ea-card">
       <h3>Ukuran posisi</h3>
       <div class="ea-grid2">
         ${f('Mode lot', 'lotMode', { opts: [['risk', 'Risiko % equity'], ['fixed', 'Lot tetap']] })}

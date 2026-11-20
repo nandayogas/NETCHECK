@@ -43,7 +43,7 @@ export function defaultsFromNetcheck(cfg = cfgFromCache()) {
 
 // ---------- Mode Swing / Scalping ----------
 // Setiap mode punya set pengaturannya sendiri. Berpindah mode menyimpan set aktif lalu memuat set tujuan.
-export const MODE_FIELDS = ['primaryTf', 'tfs', 'threshold', 'slAtr', 'rr', 'cooldown', 'maxPos', 'maxSpread', 'trail', 'closeOpposite', 'session', 'stopOff', 'expiry'];
+export const MODE_FIELDS = ['primaryTf', 'tfs', 'threshold', 'slAtr', 'rr', 'cooldown', 'maxPos', 'maxSpread', 'trail', 'closeOpposite', 'session', 'stopOff', 'expiry', 'be'];
 const clone = v => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const pickMode = s => Object.fromEntries(MODE_FIELDS.map(k => [k, clone(s[k])]));
 
@@ -95,6 +95,7 @@ export const MODES = ['swing', 'scalp', 'fast', 'straddle'];
 export function ensureModes(s) {
   if (!s.session) s.session = { on: false, start: 7, end: 20 };
   if (s.useAnalysis == null) s.useAnalysis = true;   // false = tanpa analisa NdaxTrade (pasang BUY STOP + SELL STOP)
+  if (!s.be) s.be = { on: true, start: 1, buffer: 2 };   // SL ke impas saat profit >= start x risiko, + buffer (points)
   if (s.stopOff == null) s.stopOff = 0.5;
   if (s.expiry == null) s.expiry = 5;
   if (!s.modes) {
@@ -102,6 +103,7 @@ export function ensureModes(s) {
     s.modes = { swing: pickMode(s) };
   }
   for (const m of Object.keys(PRESETS)) if (!s.modes[m]) s.modes[m] = PRESETS[m](s);
+  for (const m of Object.keys(s.modes)) if (!s.modes[m].be) s.modes[m].be = { on: true, start: 1, buffer: 2 };
   if (!MODES.includes(s.mode)) s.mode = 'swing';
   return s;
 }
@@ -111,6 +113,7 @@ export function switchMode(s, to) {
   if (s.mode === to) return s;
   s.modes[s.mode] = pickMode(s);
   Object.assign(s, clone(s.modes[to] || (PRESETS[to] ? PRESETS[to](s) : s.modes.swing)));
+  if (!s.be) s.be = { on: true, start: 1, buffer: 2 };
   s.mode = to;
   return s;
 }
