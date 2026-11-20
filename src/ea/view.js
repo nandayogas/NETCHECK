@@ -193,6 +193,7 @@ export function eaPg(el) {
     <section class="ea-card">
       <h3>Trailing stop</h3>
       ${f('Aktifkan trailing stop', 'trail.on', { type: 'check' })}
+      ${f('SL ikut low/high candle sebelumnya (bukan ATR)', 'trail.candle', { type: 'check' })}
       <div class="ea-grid2">
         ${f('Jarak = ATR ×', 'trail.atrMult', { step: 0.1, min: 0.1 })}
         ${f('Mulai saat profit ≥ (× risiko)', 'trail.startRR', { step: 0.1, min: 0 })}

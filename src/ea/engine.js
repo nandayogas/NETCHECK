@@ -80,7 +80,7 @@ export function straddlePreset(s) {
   const t = {
     ...s, primaryTf: 'M1', threshold: 0, slAtr: 1.0, rr: 1.0, cooldown: 1, maxPos: 1, maxSpread: 20,
     stopOff: 0.5, expiry: 5, follow: true, addWhile: false,
-    trail: { on: true, atrMult: 0.6, startRR: 0.5 }, closeOpposite: false, session: { on: true, start: 7, end: 20 },
+    trail: { on: true, atrMult: 0.6, startRR: 0.5, candle: true }, closeOpposite: false, session: { on: true, start: 7, end: 20 },
   };
   t.tfs = {};
   for (const k of TF_ORDER) t.tfs[k] = { on: k in STRADDLE_TFS, weight: STRADDLE_TFS[k] ?? s.tfs[k].weight };

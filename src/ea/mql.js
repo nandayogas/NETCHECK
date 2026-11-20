@@ -138,6 +138,7 @@ input double InpBeStart    = ${n((s.be || {}).start ?? 1)};        // Break-even
 input int    InpBeBuffer   = ${n((s.be || {}).buffer ?? 2)};        // Buffer di atas/bawah harga entri (points)
 input bool   InpFollow     = ${b(s.follow ?? true)};         // Pending ikut candle: dibatalkan dan dipasang ulang di harga baru tiap bar
 input bool   InpAddWhile   = ${b(s.addWhile ?? false)};      // Pasang pending walau posisi masih terbuka (sampai InpMaxPos)
+input bool   InpTrailCandle = ${b((s.trail || {}).candle ?? false)};   // Trailing SL mengikuti low/high candle sebelumnya (bukan ATR)
 
 //--- Parameter metode (default dari konfigurasi NetCheck)
 input bool   InpEMA_On = ${b(M.ema.enabled)};     input double InpEMA_W = ${n(M.ema.weight)};
@@ -585,6 +586,49 @@ void ManageBreakEven()
    }
 }
 
+//--- Trailing mengikuti low/high candle sebelumnya (hanya naik untuk BUY, turun untuk SELL)
+// Mulai saat profit >= InpTrailStart x risiko awal. Jarak buffer memakai InpBeBuffer (points).
+void ManageCandleTrail()
+{
+   if(!InpUseTrail || InpRR <= 0) return;
+   int digits = (int)SymbolInfoInteger(g_sym, SYMBOL_DIGITS);
+   double pt = SymbolInfoDouble(g_sym, SYMBOL_POINT);
+   double minDist = (double)SymbolInfoInteger(g_sym, SYMBOL_TRADE_STOPS_LEVEL) * pt;
+   double bid = SymbolInfoDouble(g_sym, SYMBOL_BID), ask = SymbolInfoDouble(g_sym, SYMBOL_ASK);
+   double buf = InpBeBuffer * pt;
+   double lowP = iLow(g_sym, InpPrimaryTf, 1), highP = iHigh(g_sym, InpPrimaryTf, 1);
+   if(lowP == 0 || highP == 0) return;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong tk = PositionGetTicket(i);
+      if(tk == 0) continue;
+      if(PositionGetString(POSITION_SYMBOL) != g_sym || PositionGetInteger(POSITION_MAGIC) != InpMagic) continue;
+      long type = PositionGetInteger(POSITION_TYPE);
+      double op = PositionGetDouble(POSITION_PRICE_OPEN), sl = PositionGetDouble(POSITION_SL), tp = PositionGetDouble(POSITION_TP);
+      if(tp == 0) continue;
+      double risk = MathAbs(tp - op) / InpRR;
+      if(risk <= 0) continue;
+      if(type == POSITION_TYPE_BUY)
+      {
+         if(bid - op < InpTrailStart * risk) continue;
+         double nsl = NormalizeDouble(lowP - buf, digits);
+         if((sl == 0 || nsl > sl + pt) && bid - nsl >= minDist) trade.PositionModify(tk, nsl, tp);
+      }
+      else if(type == POSITION_TYPE_SELL)
+      {
+         if(op - ask < InpTrailStart * risk) continue;
+         double nsl = NormalizeDouble(highP + buf, digits);
+         if((sl == 0 || nsl < sl - pt) && nsl - ask >= minDist) trade.PositionModify(tk, nsl, tp);
+      }
+   }
+}
+
+void ManageTrail()
+{
+   if(InpTrailCandle) ManageCandleTrail();
+   else ManageTrailing();
+}
+
 //--- Stop Order Straddle: BUY STOP di atas dan SELL STOP di bawah harga (OCO)
 double StraddleAtr()
 {
@@ -621,7 +665,7 @@ void CancelPending()
 void StraddleTick()
 {
    ManageBreakEven();
-   ManageTrailing();
+   ManageTrail();
    // OCO: begitu salah satu sisi terisi, sisi lain dibatalkan (kecuali mode tambah posisi)
    int nPos = CountPos();
    if(nPos > 0 && !InpAddWhile)
@@ -634,6 +678,7 @@ void StraddleTick()
    datetime bt = iTime(g_sym, InpPrimaryTf, 0);
    if(bt == 0 || bt == g_lastBar) return;      // pasang pending sekali per bar baru
    g_lastBar = bt;
+   g_atr = StraddleAtr();                      // ATR untuk trailing ATR (dihitung sekali per bar)
    if(!InSession()) { CancelPending(); return; }
    if(nPos >= InpMaxPos) { CancelPending(); return; }
    if(InpFollow) CancelPending();              // ikut candle: pending lama dibatalkan, dipasang ulang di harga baru
@@ -678,7 +723,7 @@ void OnTick()
 {
    if(InpStraddle) { StraddleTick(); return; }
    ManageBreakEven();
-   ManageTrailing();
+   ManageTrail();
    datetime bt = iTime(g_sym, InpPrimaryTf, 0);
    if(bt == 0 || bt == g_lastBar) return;      // analisis sekali per bar baru
    g_lastBar = bt;
