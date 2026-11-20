@@ -88,7 +88,7 @@ export function buildMql5(s, cfg) {
   return `//+------------------------------------------------------------------+
 //| ${name}.mq5                                                       
 //| Dibuat oleh NETCHECK EA BUILDER — strategi = mesin analisis NetCheck
-//| Instrumen: ${s.symbol} · Mode: ${s.mode === 'scalp' ? 'SCALPING' : 'SWING'} · MetaTrader 5 (kompatibel Winlator)
+//| Instrumen: ${s.symbol} · Mode: ${({ scalp: 'SCALPING', fast: 'FAST SIGNAL CONSERVATIVE' })[s.mode] || 'SWING'} · MetaTrader 5 (kompatibel Winlator)
 //| PERINGATAN: trading berisiko. Uji di akun demo / Strategy Tester dulu.
 //+------------------------------------------------------------------+
 #property copyright "NETCHECK"

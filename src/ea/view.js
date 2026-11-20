@@ -4,7 +4,11 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { TF_ORDER, CUSTOM_TYPES } from '../ndax/config.js';
 import { analyzeAll, LABELS, fmtP } from '../ndax/analyzer.js';
-import { defaultsFromNetcheck, cfgFromCache, analysisCfg, fetchHistory, loadData, precompute, simulate, optimize, btTfs, DATA_SYMBOLS, ensureModes, switchMode, scalpPreset, gridSize, GRIDS } from './engine.js';
+import { defaultsFromNetcheck, cfgFromCache, analysisCfg, fetchHistory, loadData, precompute, simulate, optimize, btTfs, DATA_SYMBOLS, ensureModes, switchMode, scalpPreset, fastPreset, gridSize, GRIDS } from './engine.js';
+
+// Label per mode untuk tampilan (kunci sama dengan S.mode).
+const MODE_NAME = { swing: 'Swing', scalp: 'Scalping', fast: 'Fast Signal Conservative' };
+const MODE_GRID = { swing: 'Swing', scalp: 'scalping', fast: 'fast signal conservative' };
 import { buildMql5, precheck, compileBat, fileBase } from './mql.js';
 import './ea.css';
 
@@ -86,16 +90,20 @@ export function eaPg(el) {
       `<div class="ea-m ${m.enabled ? '' : 'off'}"><b>${esc(m.name)}</b><span>${m.enabled ? 'bobot ' + m.weight : 'nonaktif'} · ${esc(CUSTOM_TYPES[m.type]?.label || m.type)}</span></div>`).join('');
     const dec = v => String(v).replace('.', ',');
     const sp = scalpPreset(S);
+    const fp = fastPreset(S);
     const modeCard = `
     <section class="ea-card">
       <h3>Mode trading</h3>
       <div class="ea-modes" role="group" aria-label="Mode trading">
         <button type="button" data-mode="swing" class="${S.mode === 'swing' ? 'on' : ''}" aria-pressed="${S.mode === 'swing'}">Swing<small>Trade jarang, sinyal kuat</small></button>
         <button type="button" data-mode="scalp" class="${S.mode === 'scalp' ? 'on' : ''}" aria-pressed="${S.mode === 'scalp'}">Scalping<small>Trade sering, SL ketat</small></button>
+        <button type="button" data-mode="fast" class="${S.mode === 'fast' ? 'on' : ''}" aria-pressed="${S.mode === 'fast'}">Fast Signal Conservative<small>Sinyal cepat, ambang ketat, 1 posisi</small></button>
       </div>
       ${S.mode === 'scalp'
         ? `<p class="ea-hint">Preset scalping: timeframe utama ${sp.primaryTf}, SL ${dec(sp.slAtr)}×ATR, RR ${dec(sp.rr)}, jeda ${sp.cooldown} bar, maks ${sp.maxPos} posisi, spread maks ${sp.maxSpread} point, dan entri hanya di jam sesi (UTC). Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Hasil scalping sangat peka terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
-        : `<p class="ea-hint">Mode swing memakai pengaturan NetCheck. Pengaturan scalping tersimpan terpisah dan tidak ikut berubah saat Anda kembali ke sini.</p>`}
+        : S.mode === 'fast'
+          ? `<p class="ea-hint">Preset Fast Signal Conservative: timeframe utama ${fp.primaryTf}, ambang sinyal ${dec(fp.threshold)} (lebih ketat dari scalping), SL ${dec(fp.slAtr)}×ATR, RR ${dec(fp.rr)}, jeda ${fp.cooldown} bar, maks ${fp.maxPos} posisi, spread maks ${fp.maxSpread} point, dan entri hanya di jam sesi (UTC). Timeframe M30 dan H1 ikut sebagai konfirmasi. Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Sinyal lebih jarang daripada scalping, tetapi tetap sensitif terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
+          : `<p class="ea-hint">Mode swing memakai pengaturan NetCheck. Pengaturan scalping dan fast signal tersimpan terpisah dan tidak ikut berubah saat Anda kembali ke sini.</p>`}
     </section>`;
     const tfRows = TF_ORDER.map(k => `<div class="ea-tfrow">
         <label class="ea-sw"><span>${k}${S.primaryTf === k ? ' <em>UTAMA</em>' : ''}</span><input type="checkbox" data-p="tfs.${k}.on" ${S.tfs[k].on ? 'checked' : ''} ${S.primaryTf === k ? 'disabled' : ''}><i></i></label>
@@ -230,11 +238,11 @@ export function eaPg(el) {
       <p class="ea-hint">Eksekusi di open bar berikutnya, SL didahulukan bila SL dan TP tersentuh dalam satu bar. Hasil MT5 Strategy Tester (data broker, tick) akan berbeda; anggap ini penyaring awal, bukan jaminan.</p>
     </section>
     <section class="ea-card">
-      <h3>AI Strategy Generator <small>${S.mode === 'scalp' ? 'mode scalping' : 'mode swing'}</small></h3>
-      <p class="ea-hint">${S.mode === 'scalp'
-        ? `Mencoba ${gridSize('scalp')} kombinasi ambang sinyal, SL, RR, dan jeda antar entri. Dipilih di 70% data pertama, lalu diuji di 30% data terakhir. Syarat minimal ${GRIDS.scalp.minN} trade per kombinasi. Spread di bawah (${esc(S.bt.spread)}) harus sesuai spread broker Anda; kombinasi dengan jeda 0 bar sering tampak bagus di backtest tetapi rugi oleh biaya nyata.`
-        : `Mencoba ${gridSize('swing')} kombinasi ambang sinyal, SL, dan RR pada mesin NetCheck. Dipilih di 70% data pertama, lalu diuji di 30% data terakhir yang tidak dipakai memilih.`}</p>
-      <button class="ea-btn" data-act="opt" ${st.busy ? 'disabled' : ''}>${st.busy === 'opt' ? 'Mengoptimasi…' : (S.mode === 'scalp' ? 'Cari strategi scalping terbaik' : 'Cari strategi terbaik')}</button>
+      <h3>AI Strategy Generator <small>mode ${MODE_GRID[S.mode] || MODE_GRID.swing}</small></h3>
+      <p class="ea-hint">${S.mode === 'swing'
+        ? `Mencoba ${gridSize('swing')} kombinasi ambang sinyal, SL, dan RR pada mesin NetCheck. Dipilih di 70% data pertama, lalu diuji di 30% data terakhir yang tidak dipakai memilih.`
+        : `Mencoba ${gridSize(S.mode)} kombinasi ambang sinyal, SL, RR, dan jeda antar entri. Dipilih di 70% data pertama, lalu diuji di 30% data terakhir. Syarat minimal ${GRIDS[S.mode].minN} trade per kombinasi. Spread di bawah (${esc(S.bt.spread)}) harus sesuai spread broker Anda; kombinasi dengan jeda 0 bar sering tampak bagus di backtest tetapi rugi oleh biaya nyata.${S.mode === 'fast' ? ' Fast Signal Conservative hanya mencari ambang 0,35–0,6 supaya sinyal tetap jarang dan selektif.' : ''}`}</p>
+      <button class="ea-btn" data-act="opt" ${st.busy ? 'disabled' : ''}>${st.busy === 'opt' ? 'Mengoptimasi…' : (S.mode === 'swing' ? 'Cari strategi terbaik' : `Cari strategi ${MODE_GRID[S.mode]} terbaik`)}</button>
       ${o ? (o.top.length ? o.top.map((r, i) => `<div class="ea-opt">
         <div class="ea-oh"><b>#${i + 1}</b><span>ambang ${r.threshold} · SL ${r.slAtr}×ATR · RR ${r.rr}${r.cooldown != null ? ` · jeda ${r.cooldown} bar` : ''}</span><button class="ea-btn sm" data-apply="${i}">Terapkan</button></div>
         <div class="ea-oc"><div><small>Latih</small><b class="${r.train.net >= 0 ? 'buy' : 'sell'}">${num(r.train.netPct, 1)}%</b><small>${r.train.n} trade · DD ${num(r.train.maxDD, 1)}%</small></div>
@@ -292,7 +300,7 @@ export function eaPg(el) {
     const scroll = root.querySelector('.ea-body')?.scrollTop;
     root.innerHTML = `
       <header class="ea-top">
-        <div class="ea-brand"><span class="ea-logo">EA</span><div><b>NETCHECK EA BUILDER</b><small>MT5 · ${esc(S.symbol)} · ${S.mode === 'scalp' ? 'Scalping' : 'Swing'} · Full Auto</small></div></div>
+        <div class="ea-brand"><span class="ea-logo">EA</span><div><b>NETCHECK EA BUILDER</b><small>MT5 · ${esc(S.symbol)} · ${MODE_NAME[S.mode] || 'Swing'} · Full Auto</small></div></div>
         <span class="ea-pill">MQL5</span>
       </header>
       <nav class="ea-tabs" role="tablist">${TABS.map(([k, t]) => `<button role="tab" class="${st.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${st.tab === k}">${t}</button>`).join('')}</nav>

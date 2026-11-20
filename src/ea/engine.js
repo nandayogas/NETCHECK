@@ -59,14 +59,32 @@ export function scalpPreset(s) {
   return pickMode(t);
 }
 
-// Pastikan kedua set mode ada. Dipanggil saat memuat pengaturan.
+// Preset Fast Signal Conservative: sinyal lebih sering dari M15/M5 yang dikonfirmasi M30/H1,
+// tapi ambang lebih tinggi, SL lebih longgar, RR lebih besar, jeda antar entri lebih lama, dan 1 posisi.
+export const FAST_TFS = { M5: 1.0, M15: 1.0, M30: 0.8, H1: 0.6 };
+export function fastPreset(s) {
+  const t = {
+    ...s, primaryTf: 'M15', threshold: 0.45, slAtr: 1.2, rr: 1.5, cooldown: 4, maxPos: 1, maxSpread: 20,
+    trail: { on: true, atrMult: 1, startRR: 1 }, closeOpposite: true, session: { on: true, start: 7, end: 20 },
+  };
+  t.tfs = {};
+  for (const k of TF_ORDER) t.tfs[k] = { on: k in FAST_TFS, weight: FAST_TFS[k] ?? s.tfs[k].weight };
+  return pickMode(t);
+}
+
+// Preset per mode selain swing (yang memakai pengaturan NetCheck).
+export const PRESETS = { scalp: scalpPreset, fast: fastPreset };
+export const MODES = ['swing', 'scalp', 'fast'];
+
+// Pastikan semua set mode ada. Dipanggil saat memuat pengaturan.
 export function ensureModes(s) {
   if (!s.session) s.session = { on: false, start: 7, end: 20 };
   if (!s.modes) {
     s.mode = 'swing';
-    s.modes = { swing: pickMode(s), scalp: scalpPreset(s) };
+    s.modes = { swing: pickMode(s) };
   }
-  if (s.mode !== 'scalp') s.mode = 'swing';
+  for (const m of Object.keys(PRESETS)) if (!s.modes[m]) s.modes[m] = PRESETS[m](s);
+  if (!MODES.includes(s.mode)) s.mode = 'swing';
   return s;
 }
 
@@ -74,7 +92,7 @@ export function switchMode(s, to) {
   ensureModes(s);
   if (s.mode === to) return s;
   s.modes[s.mode] = pickMode(s);
-  Object.assign(s, clone(s.modes[to] || (to === 'scalp' ? scalpPreset(s) : s.modes.swing)));
+  Object.assign(s, clone(s.modes[to] || (PRESETS[to] ? PRESETS[to](s) : s.modes.swing)));
   s.mode = to;
   return s;
 }
@@ -255,6 +273,8 @@ export function simulate(series, s, from = 0, to = series.length) {
 export const GRIDS = {
   swing: { threshold: [0.15, 0.2, 0.25, 0.3, 0.4], slAtr: [1, 1.5, 2, 2.5], rr: [1.5, 2, 3], cooldown: null, minN: 8 },
   scalp: { threshold: [0.2, 0.25, 0.3, 0.35, 0.45], slAtr: [0.6, 0.8, 1, 1.2, 1.5], rr: [1, 1.25, 1.5, 2], cooldown: [0, 1, 2, 4], minN: 20 },
+  // Fast Signal Conservative: ambang lebih tinggi dan jeda lebih lama, supaya sinyal tidak terlalu banyak.
+  fast: { threshold: [0.35, 0.4, 0.45, 0.5, 0.6], slAtr: [0.8, 1, 1.2, 1.5], rr: [1.25, 1.5, 2, 2.5], cooldown: [2, 4, 6, 8], minN: 15 },
 };
 export const gridSize = mode => { const G = GRIDS[mode] || GRIDS.swing; return G.threshold.length * G.slAtr.length * G.rr.length * (G.cooldown ? G.cooldown.length : 1); };
 
