@@ -34,9 +34,49 @@ export function defaultsFromNetcheck(cfg = cfgFromCache()) {
     slAtr: cfg.signal.atrSlMult, rr: cfg.signal.rr,
     trail: { on: true, atrMult: 1, startRR: 1 },
     maxPos: 3, cooldown: 3, closeOpposite: true, maxSpread: 50, slippage: 30,
+    session: { on: false, start: 7, end: 20 },   // jam UTC; hanya membatasi entri baru
+    mode: 'swing',
     bt: { bars: 1000, balance: 1000, spread: 0.25 },
     compileUrl: '',
   };
+}
+
+// ---------- Mode Swing / Scalping ----------
+// Setiap mode punya set pengaturannya sendiri. Berpindah mode menyimpan set aktif lalu memuat set tujuan.
+export const MODE_FIELDS = ['primaryTf', 'tfs', 'threshold', 'slAtr', 'rr', 'cooldown', 'maxPos', 'maxSpread', 'trail', 'closeOpposite', 'session'];
+const clone = v => JSON.parse(JSON.stringify(v));
+const pickMode = s => Object.fromEntries(MODE_FIELDS.map(k => [k, clone(s[k])]));
+
+// Preset scalping: M5 sebagai acuan, timeframe lebih rendah ikut, SL ketat, RR kecil, sesi aktif.
+export const SCALP_TFS = { M1: 0.6, M5: 1.0, M15: 1.0, M30: 0.6, H1: 0.4 };
+export function scalpPreset(s) {
+  const t = {
+    ...s, primaryTf: 'M5', threshold: 0.3, slAtr: 0.8, rr: 1.2, cooldown: 1, maxPos: 2, maxSpread: 20,
+    trail: { on: true, atrMult: 0.6, startRR: 0.5 }, closeOpposite: true, session: { on: true, start: 7, end: 20 },
+  };
+  t.tfs = {};
+  for (const k of TF_ORDER) t.tfs[k] = { on: k in SCALP_TFS, weight: SCALP_TFS[k] ?? s.tfs[k].weight };
+  return pickMode(t);
+}
+
+// Pastikan kedua set mode ada. Dipanggil saat memuat pengaturan.
+export function ensureModes(s) {
+  if (!s.session) s.session = { on: false, start: 7, end: 20 };
+  if (!s.modes) {
+    s.mode = 'swing';
+    s.modes = { swing: pickMode(s), scalp: scalpPreset(s) };
+  }
+  if (s.mode !== 'scalp') s.mode = 'swing';
+  return s;
+}
+
+export function switchMode(s, to) {
+  ensureModes(s);
+  if (s.mode === to) return s;
+  s.modes[s.mode] = pickMode(s);
+  Object.assign(s, clone(s.modes[to] || (to === 'scalp' ? scalpPreset(s) : s.modes.swing)));
+  s.mode = to;
+  return s;
 }
 
 // Config analisis NetCheck yang dipakai backtest = konfigurasi NetCheck + pengaturan EA.
@@ -147,6 +187,12 @@ export function simulate(series, s, from = 0, to = series.length) {
     bal += pnl;
     trades.push({ dir: p.dir, entry: p.entry, exit: price, lots: p.lots, pnl, t0: p.t0, t1: t, why });
   };
+  const sess = s.session;
+  const inSession = t => {
+    if (!sess || !sess.on) return true;
+    const h = new Date(t).getUTCHours();
+    return sess.start <= sess.end ? h >= sess.start && h < sess.end : h >= sess.start || h < sess.end;
+  };
   for (let i = from; i < to; i++) {
     const b = series[i];
     // 1) kelola posisi pada bar ini (SL lebih dulu bila SL dan TP tersentuh di bar yang sama)
@@ -173,7 +219,7 @@ export function simulate(series, s, from = 0, to = series.length) {
       const allowed = sig !== 0 && !(d === 1 && sig < 0) && !(d === 2 && sig > 0);
       if (allowed) {
         if (s.closeOpposite) for (let k = open.length - 1; k >= 0; k--) if (open[k].dir === -sig) { close(open[k], sig > 0 ? b.o + spread : b.o, b.t, 'Balik'); open.splice(k, 1); }
-        if (open.length < s.maxPos && i - lastEntry >= s.cooldown) {
+        if (open.length < s.maxPos && i - lastEntry >= s.cooldown && inSession(b.t)) {
           const risk = b.atr * s.slAtr;
           const entry = sig > 0 ? b.o + spread : b.o;
           let lots = s.lot;
@@ -204,19 +250,29 @@ export function simulate(series, s, from = 0, to = series.length) {
   };
 }
 
+// Grid pencarian per mode. Scalping: lebih banyak kombinasi (jeda antar entri ikut dicari)
+// dan syarat minimal trade lebih tinggi, karena hasil scalping perlu sampel yang cukup.
+export const GRIDS = {
+  swing: { threshold: [0.15, 0.2, 0.25, 0.3, 0.4], slAtr: [1, 1.5, 2, 2.5], rr: [1.5, 2, 3], cooldown: null, minN: 8 },
+  scalp: { threshold: [0.2, 0.25, 0.3, 0.35, 0.45], slAtr: [0.6, 0.8, 1, 1.2, 1.5], rr: [1, 1.25, 1.5, 2], cooldown: [0, 1, 2, 4], minN: 20 },
+};
+export const gridSize = mode => { const G = GRIDS[mode] || GRIDS.swing; return G.threshold.length * G.slAtr.length * G.rr.length * (G.cooldown ? G.cooldown.length : 1); };
+
 // "AI Strategy Generator": mencari kombinasi parameter terbaik dari mesin NetCheck lewat backtest.
 // Memilih di data latih (70%) lalu menguji di data uji (30%) agar overfitting kelihatan.
-export function optimize(series, s) {
+export function optimize(series, s, mode = s.mode || 'swing') {
+  const G = GRIDS[mode] || GRIDS.swing;
   const cut = Math.floor(series.length * 0.7);
   const grid = [];
-  for (const threshold of [0.15, 0.2, 0.25, 0.3, 0.4])
-    for (const slAtr of [1, 1.5, 2, 2.5])
-      for (const rr of [1.5, 2, 3]) grid.push({ threshold, slAtr, rr });
+  for (const threshold of G.threshold)
+    for (const slAtr of G.slAtr)
+      for (const rr of G.rr)
+        for (const cd of G.cooldown || [null]) grid.push(cd == null ? { threshold, slAtr, rr } : { threshold, slAtr, rr, cooldown: cd });
   const rows = grid.map(g => {
     const r = simulate(series, { ...s, ...g }, 0, cut);
-    const score = r.n >= 8 ? r.netPct / (r.maxDD + 5) : -999;
+    const score = r.n >= G.minN ? r.netPct / (r.maxDD + 5) : -999;
     return { ...g, train: r, score };
   }).sort((a, b) => b.score - a.score);
   const top = rows.slice(0, 3).map(r => ({ ...r, test: simulate(series, { ...s, ...r }, cut, series.length) }));
-  return { top, cut, tried: grid.length };
+  return { top, cut, tried: grid.length, mode, minN: G.minN };
 }

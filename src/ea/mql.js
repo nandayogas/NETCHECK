@@ -3,6 +3,7 @@
 // digabung per timeframe lalu dibobot antar timeframe, sama seperti analyzeAll().
 import { TF_ORDER } from '../ndax/config.js';
 import { sigFor } from '../ndax/analyzer.js';
+import { CUSTOM_TYPES } from '../ndax/config.js';
 
 const PERIOD = { M1: 'PERIOD_M1', M5: 'PERIOD_M5', M15: 'PERIOD_M15', M30: 'PERIOD_M30', H1: 'PERIOD_H1', H4: 'PERIOD_H4', D1: 'PERIOD_D1' };
 const b = v => (v ? 'true' : 'false');
@@ -10,8 +11,73 @@ const n = v => String(Number(v));
 const safeName = s => (String(s || 'NetCheckEA').replace(/[^A-Za-z0-9_]/g, '') || 'NetCheckEA').slice(0, 40);
 export const fileBase = s => safeName(s.name);
 
+// ---- Metode tambahan (dari NdaxTrade Dev). Setiap tipe = blok MQL5 identik dengan customScore() di analyzer.js.
+const cmInputs = list => list.map((cm, i) => {
+  const N = `InpCM${i + 1}`;
+  const spec = CUSTOM_TYPES[cm.type];
+  const head = `input bool   ${N}_On = ${b(cm.enabled)};   input double ${N}_W = ${n(cm.weight)};   // ${cm.name.replace(/\*\//g, '')} (${spec.label})`;
+  const ps = spec.params.map(q => `input ${q.int ? 'int   ' : 'double'} ${N}_${q.k} = ${n(cm.p[q.k])};`).join('  ');
+  return `${head}\n${ps}`;
+}).join('\n');
+
+const cmCalc = (cm, i) => {
+  const N = `InpCM${i + 1}`, W = `${N}_W`;
+  let body;
+  switch (cm.type) {
+    case 'ema_cross': body = `      double ef[], es2[];
+      CalcEma(closes, ${N}_fast, ef); CalcEma(closes, ${N}_slow, es2);
+      if(Ok(ef[n]) && Ok(es2[n]) && last > 0)
+         AddScore(Clamp((ef[n] - es2[n]) / last * 100.0 / ${N}_scale), ${W}, acc, ws);`; break;
+    case 'roc': body = `      int pp = ${N}_period;
+      if(n >= pp && r[n-pp].close > 0)
+         AddScore(Clamp((last - r[n-pp].close) / r[n-pp].close * 100.0 / ${N}_scale), ${W}, acc, ws);`; break;
+    case 'bollinger': body = `      int pp = ${N}_period;
+      if(got >= pp)
+      {
+         double m = 0; for(int i = got - pp; i < got; i++) m += closes[i];
+         m /= pp;
+         double v2 = 0; for(int i = got - pp; i < got; i++) v2 += (closes[i] - m) * (closes[i] - m);
+         double sd = MathSqrt(v2 / pp);
+         if(sd > 0)
+         {
+            double lo = m - ${N}_mult * sd, hi = m + ${N}_mult * sd;
+            AddScore(Clamp(((last - lo) / (hi - lo) - 0.5) * 2.0), ${W}, acc, ws);
+         }
+         else AddScore(0.0, ${W}, acc, ws);
+      }`; break;
+    case 'stoch': body = `      int pp = ${N}_period;
+      if(got >= pp)
+      {
+         double hh = -DBL_MAX, ll = DBL_MAX;
+         for(int i = got - pp; i < got; i++) { hh = MathMax(hh, r[i].high); ll = MathMin(ll, r[i].low); }
+         double k = (hh > ll) ? (last - ll) / (hh - ll) * 100.0 : 50.0;
+         double s = (k >= ${N}_ob) ? -0.3 : ((k <= ${N}_os) ? 0.3 : (k - 50.0) / 25.0);
+         AddScore(Clamp(s), ${W}, acc, ws);
+      }`; break;
+    case 'donchian': body = `      int pp = ${N}_period;
+      if(n >= pp)
+      {
+         double hi = -DBL_MAX, lo = DBL_MAX;
+         for(int i = n - pp; i < n; i++) { hi = MathMax(hi, r[i].high); lo = MathMin(lo, r[i].low); }
+         double s;
+         if(last > hi) s = 1.0;
+         else if(last < lo) s = -1.0;
+         else { double pos = (hi > lo) ? (last - lo) / (hi - lo) : 0.5; s = (pos * 2.0 - 1.0) * 0.5; }
+         AddScore(Clamp(s), ${W}, acc, ws);
+      }`; break;
+    default: body = '';
+  }
+  return `   // Metode tambahan #${i + 1}: ${cm.name.replace(/\*\//g, '')} (${cm.type})\n   if(${N}_On)\n   {\n${body}\n   }\n`;
+};
+
+const sessInputs = s => {
+  const se = s.session || { on: false, start: 7, end: 20 };
+  return `input bool   InpSessOn    = ${b(se.on)};   // Batasi entri baru ke jam tertentu (UTC)\ninput int    InpSessStart = ${n(se.start)};   // Jam mulai (UTC, 0-23)\ninput int    InpSessEnd   = ${n(se.end)};   // Jam selesai (UTC, 0-23; boleh melewati tengah malam)`;
+};
+
 export function buildMql5(s, cfg) {
   const M = cfg.methods;
+  const customs = (cfg.customMethods || []).filter(cm => CUSTOM_TYPES[cm.type]);
   const name = safeName(s.name);
   const tfInputs = TF_ORDER.map(k => `input bool   InpTF_${k} = ${b(s.tfs[k].on)};   // Pakai timeframe ${k}\ninput double InpW_${k}  = ${n(s.tfs[k].weight)};   // Bobot ${k}`).join('\n');
   const sensArr = TF_ORDER.map(k => {
@@ -22,7 +88,7 @@ export function buildMql5(s, cfg) {
   return `//+------------------------------------------------------------------+
 //| ${name}.mq5                                                       
 //| Dibuat oleh NETCHECK EA BUILDER — strategi = mesin analisis NetCheck
-//| Instrumen: ${s.symbol} · MetaTrader 5 (kompatibel Winlator)
+//| Instrumen: ${s.symbol} · Mode: ${s.mode === 'scalp' ? 'SCALPING' : 'SWING'} · MetaTrader 5 (kompatibel Winlator)
 //| PERINGATAN: trading berisiko. Uji di akun demo / Strategy Tester dulu.
 //+------------------------------------------------------------------+
 #property copyright "NETCHECK"
@@ -40,6 +106,7 @@ input ENUM_NC_DIR      InpDirection   = ${['NC_BOTH', 'NC_BUY_ONLY', 'NC_SELL_ON
 input long             InpMagic       = ${n(s.magic)};     // Magic number
 input string           InpComment     = "NETCHECK-EA";      // Komentar order
 input int              InpCandles     = ${n(cfg.market.candles)};              // Jumlah candle analisis per timeframe
+${sessInputs(s)}
 
 //--- Sinyal NetCheck
 input double InpThreshold   = ${n(s.threshold)};   // Skor minimum BUY/SELL (0-1)
@@ -84,6 +151,9 @@ input int    InpFIB_LB = ${n(M.fibonacci.lookback)};
 input double InpFIB_GMin = ${n(M.fibonacci.goldenMin)};  input double InpFIB_GMax = ${n(M.fibonacci.goldenMax)};
 input double InpFIB_Golden = ${n(M.fibonacci.scoreGolden)};  input double InpFIB_Shallow = ${n(M.fibonacci.scoreShallow)};
 input double InpFIB_Deep = ${n(M.fibonacci.scoreDeep)};  input double InpFIB_Break = ${n(M.fibonacci.scoreBreakout)};
+
+//--- Metode tambahan (dibuat di NdaxTrade Dev; tiap nomor = satu metode)
+${cmInputs(customs) || '// (tidak ada metode tambahan)'}
 
 #define EMA_N ${M.ema.periods.length}
 int EMA_P[EMA_N] = {${M.ema.periods.join(',')}};
@@ -341,6 +411,7 @@ double AnalyzeTf(const ENUM_TIMEFRAMES tf, const double sens, double &atrOut)
       }
    }
 
+${customs.map((cm, i) => cmCalc(cm, i)).join('\n')}
    double raw = (ws > 0) ? acc / ws : 0.0;
    return Clamp(raw * sens * volFactor);
 }
@@ -363,6 +434,17 @@ bool Evaluate(double &score)
    if(den <= 0) return false;
    score = num / den;
    return true;
+}
+
+//--- Sesi perdagangan (jam UTC)
+bool InSession()
+{
+   if(!InpSessOn) return true;
+   MqlDateTime dt;
+   TimeGMT(dt);
+   int h = dt.hour;
+   if(InpSessStart <= InpSessEnd) return (h >= InpSessStart && h < InpSessEnd);
+   return (h >= InpSessStart || h < InpSessEnd);
 }
 
 //--- Posisi
@@ -488,6 +570,7 @@ void OnTick()
    if(InpDirection == NC_SELL_ONLY && sig > 0) return;
 
    if(InpCloseOpp) CloseDir(-sig);
+   if(!InSession()) return;                   // di luar sesi: tidak ada entri baru
    if(CountPos() >= InpMaxPos) return;
    int secs = PeriodSeconds(InpPrimaryTf);
    if(g_lastEntry > 0 && secs > 0 && (bt - g_lastEntry) / secs < InpCooldown) return;

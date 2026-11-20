@@ -2,9 +2,9 @@
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { TF_ORDER } from '../ndax/config.js';
+import { TF_ORDER, CUSTOM_TYPES } from '../ndax/config.js';
 import { analyzeAll, LABELS, fmtP } from '../ndax/analyzer.js';
-import { defaultsFromNetcheck, cfgFromCache, analysisCfg, fetchHistory, loadData, precompute, simulate, optimize, btTfs, DATA_SYMBOLS } from './engine.js';
+import { defaultsFromNetcheck, cfgFromCache, analysisCfg, fetchHistory, loadData, precompute, simulate, optimize, btTfs, DATA_SYMBOLS, ensureModes, switchMode, scalpPreset, gridSize, GRIDS } from './engine.js';
 import { buildMql5, precheck, compileBat, fileBase } from './mql.js';
 import './ea.css';
 
@@ -20,12 +20,12 @@ function loadSettings() {
   try {
     const sv = JSON.parse(localStorage.getItem(KEY));
     if (sv) {
-      const m = { ...base, ...sv, trail: { ...base.trail, ...sv.trail }, bt: { ...base.bt, ...sv.bt }, tfs: { ...base.tfs } };
+      const m = { ...base, ...sv, trail: { ...base.trail, ...sv.trail }, bt: { ...base.bt, ...sv.bt }, tfs: { ...base.tfs }, session: { ...base.session, ...sv.session } };
       for (const k of TF_ORDER) m.tfs[k] = { ...base.tfs[k], ...(sv.tfs && sv.tfs[k]) };
-      return m;
+      return ensureModes(m);
     }
   } catch { /* pakai default */ }
-  return base;
+  return ensureModes(base);
 }
 const persist = s => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* penyimpanan penuh */ } };
 
@@ -82,11 +82,26 @@ export function eaPg(el) {
     const cfg = cfgFromCache();
     const ms = Object.entries(cfg.methods).map(([k, m]) =>
       `<div class="ea-m ${m.enabled ? '' : 'off'}"><b>${esc(LABELS[k] || k)}</b><span>${m.enabled ? 'bobot ' + m.weight : 'nonaktif'}</span></div>`).join('');
+    const cms = (cfg.customMethods || []).map(m =>
+      `<div class="ea-m ${m.enabled ? '' : 'off'}"><b>${esc(m.name)}</b><span>${m.enabled ? 'bobot ' + m.weight : 'nonaktif'} · ${esc(CUSTOM_TYPES[m.type]?.label || m.type)}</span></div>`).join('');
+    const dec = v => String(v).replace('.', ',');
+    const sp = scalpPreset(S);
+    const modeCard = `
+    <section class="ea-card">
+      <h3>Mode trading</h3>
+      <div class="ea-modes" role="group" aria-label="Mode trading">
+        <button type="button" data-mode="swing" class="${S.mode === 'swing' ? 'on' : ''}" aria-pressed="${S.mode === 'swing'}">Swing<small>Trade jarang, sinyal kuat</small></button>
+        <button type="button" data-mode="scalp" class="${S.mode === 'scalp' ? 'on' : ''}" aria-pressed="${S.mode === 'scalp'}">Scalping<small>Trade sering, SL ketat</small></button>
+      </div>
+      ${S.mode === 'scalp'
+        ? `<p class="ea-hint">Preset scalping: timeframe utama ${sp.primaryTf}, SL ${dec(sp.slAtr)}×ATR, RR ${dec(sp.rr)}, jeda ${sp.cooldown} bar, maks ${sp.maxPos} posisi, spread maks ${sp.maxSpread} point, dan entri hanya di jam sesi (UTC). Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Hasil scalping sangat peka terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
+        : `<p class="ea-hint">Mode swing memakai pengaturan NetCheck. Pengaturan scalping tersimpan terpisah dan tidak ikut berubah saat Anda kembali ke sini.</p>`}
+    </section>`;
     const tfRows = TF_ORDER.map(k => `<div class="ea-tfrow">
         <label class="ea-sw"><span>${k}${S.primaryTf === k ? ' <em>UTAMA</em>' : ''}</span><input type="checkbox" data-p="tfs.${k}.on" ${S.tfs[k].on ? 'checked' : ''} ${S.primaryTf === k ? 'disabled' : ''}><i></i></label>
         <input type="number" inputmode="decimal" step="0.1" min="0" data-p="tfs.${k}.weight" value="${S.tfs[k].weight}" aria-label="Bobot ${k}"></div>`).join('');
     const lv = st.live;
-    return `
+    return `${modeCard}
     <section class="ea-card">
       <h3>Instrumen & platform</h3>
       <div class="ea-grid2">
@@ -108,8 +123,8 @@ export function eaPg(el) {
     </section>
     <section class="ea-card">
       <h3>Metode NetCheck yang diubah jadi aturan EA</h3>
-      <div class="ea-ms">${ms}</div>
-      <p class="ea-hint">Metode dan bobot dibaca dari konfigurasi NdaxTrade/NetCheck yang aktif di aplikasi. Perubahan di sana otomatis ikut saat kode dibuat ulang.</p>
+      <div class="ea-ms">${ms}${cms}</div>
+      <p class="ea-hint">Metode dan bobot dibaca dari konfigurasi NdaxTrade/NetCheck yang aktif di aplikasi. Metode tambahan yang dibuat di NdaxTrade Dev ikut ditampilkan dan dihitung di EA.</p>
       <button class="ea-btn ghost" data-act="sync">Sinkron ulang dari NetCheck</button>
     </section>
     <section class="ea-card">
@@ -159,6 +174,15 @@ export function eaPg(el) {
         ${f('Magic number', 'magic', { step: 1, min: 1 })}
       </div>
       ${f('Tutup posisi lawan saat sinyal berbalik', 'closeOpposite', { type: 'check' })}
+    </section>
+    <section class="ea-card">
+      <h3>Sesi perdagangan <small>jam UTC</small></h3>
+      ${f('Batasi entri baru ke jam tertentu', 'session.on', { type: 'check' })}
+      <div class="ea-grid2">
+        ${f('Mulai (jam UTC)', 'session.start', { step: 1, min: 0, max: 23 })}
+        ${f('Selesai (jam UTC)', 'session.end', { step: 1, min: 0, max: 23 })}
+      </div>
+      <p class="ea-hint">Contoh: 07–20 UTC kira-kira mencakup sesi London dan New York. Posisi yang sudah terbuka tetap dikelola di luar sesi; filter hanya memblokir entri baru.</p>
     </section>`;
 
   // ---------- tab Backtest ----------
@@ -206,14 +230,16 @@ export function eaPg(el) {
       <p class="ea-hint">Eksekusi di open bar berikutnya, SL didahulukan bila SL dan TP tersentuh dalam satu bar. Hasil MT5 Strategy Tester (data broker, tick) akan berbeda; anggap ini penyaring awal, bukan jaminan.</p>
     </section>
     <section class="ea-card">
-      <h3>AI Strategy Generator</h3>
-      <p class="ea-hint">Mencoba 60 kombinasi ambang sinyal, SL, dan RR pada mesin NetCheck. Dipilih di 70% data pertama, lalu diuji di 30% data terakhir yang tidak dipakai memilih.</p>
-      <button class="ea-btn" data-act="opt" ${st.busy ? 'disabled' : ''}>${st.busy === 'opt' ? 'Mengoptimasi…' : 'Cari strategi terbaik'}</button>
+      <h3>AI Strategy Generator <small>${S.mode === 'scalp' ? 'mode scalping' : 'mode swing'}</small></h3>
+      <p class="ea-hint">${S.mode === 'scalp'
+        ? `Mencoba ${gridSize('scalp')} kombinasi ambang sinyal, SL, RR, dan jeda antar entri. Dipilih di 70% data pertama, lalu diuji di 30% data terakhir. Syarat minimal ${GRIDS.scalp.minN} trade per kombinasi. Spread di bawah (${esc(S.bt.spread)}) harus sesuai spread broker Anda; kombinasi dengan jeda 0 bar sering tampak bagus di backtest tetapi rugi oleh biaya nyata.`
+        : `Mencoba ${gridSize('swing')} kombinasi ambang sinyal, SL, dan RR pada mesin NetCheck. Dipilih di 70% data pertama, lalu diuji di 30% data terakhir yang tidak dipakai memilih.`}</p>
+      <button class="ea-btn" data-act="opt" ${st.busy ? 'disabled' : ''}>${st.busy === 'opt' ? 'Mengoptimasi…' : (S.mode === 'scalp' ? 'Cari strategi scalping terbaik' : 'Cari strategi terbaik')}</button>
       ${o ? (o.top.length ? o.top.map((r, i) => `<div class="ea-opt">
-        <div class="ea-oh"><b>#${i + 1}</b><span>ambang ${r.threshold} · SL ${r.slAtr}×ATR · RR ${r.rr}</span><button class="ea-btn sm" data-apply="${i}">Terapkan</button></div>
+        <div class="ea-oh"><b>#${i + 1}</b><span>ambang ${r.threshold} · SL ${r.slAtr}×ATR · RR ${r.rr}${r.cooldown != null ? ` · jeda ${r.cooldown} bar` : ''}</span><button class="ea-btn sm" data-apply="${i}">Terapkan</button></div>
         <div class="ea-oc"><div><small>Latih</small><b class="${r.train.net >= 0 ? 'buy' : 'sell'}">${num(r.train.netPct, 1)}%</b><small>${r.train.n} trade · DD ${num(r.train.maxDD, 1)}%</small></div>
         <div><small>Uji (data baru)</small><b class="${r.test.net >= 0 ? 'buy' : 'sell'}">${num(r.test.netPct, 1)}%</b><small>${r.test.n} trade · DD ${num(r.test.maxDD, 1)}%</small></div></div>
-        ${r.test.net < 0 ? '<div class="ea-warn">Rugi di data uji: kemungkinan overfitting.</div>' : ''}</div>`).join('') : '<div class="ea-warn">Tidak ada kombinasi dengan minimal 8 trade pada data latih. Perbanyak bar uji atau longgarkan ambang.</div>') : ''}
+        ${r.test.net < 0 ? '<div class="ea-warn">Rugi di data uji: kemungkinan overfitting.</div>' : ''}</div>`).join('') : `<div class="ea-warn">Tidak ada kombinasi dengan minimal ${o.minN} trade pada data latih. Perbanyak bar uji atau longgarkan ambang.</div>`) : ''}
     </section>` : ''}`;
   };
 
@@ -266,7 +292,7 @@ export function eaPg(el) {
     const scroll = root.querySelector('.ea-body')?.scrollTop;
     root.innerHTML = `
       <header class="ea-top">
-        <div class="ea-brand"><span class="ea-logo">EA</span><div><b>NETCHECK EA BUILDER</b><small>MT5 · XAUUSD · Full Auto</small></div></div>
+        <div class="ea-brand"><span class="ea-logo">EA</span><div><b>NETCHECK EA BUILDER</b><small>MT5 · ${esc(S.symbol)} · ${S.mode === 'scalp' ? 'Scalping' : 'Swing'} · Full Auto</small></div></div>
         <span class="ea-pill">MQL5</span>
       </header>
       <nav class="ea-tabs" role="tablist">${TABS.map(([k, t]) => `<button role="tab" class="${st.tab === k ? 'on' : ''}" data-tab="${k}" aria-selected="${st.tab === k}">${t}</button>`).join('')}</nav>
@@ -292,12 +318,20 @@ export function eaPg(el) {
   };
 
   root.addEventListener('click', async e => {
-    const t = e.target.closest('[data-tab],[data-act],[data-apply]');
+    const t = e.target.closest('[data-tab],[data-act],[data-apply],[data-mode]');
     if (!t) return;
     if (t.dataset.tab) { st.tab = t.dataset.tab; st.err = ''; return render(); }
+    if (t.dataset.mode) {
+      if (st.busy) return;
+      switchMode(S, t.dataset.mode); persist(S);
+      st.series = null; st.loaded = null; st.bt = null; st.opt = null; st.ex5 = null; st.err = '';
+      return render();
+    }
     if (t.dataset.apply != null) {
       const r = st.opt.top[+t.dataset.apply];
-      S.threshold = r.threshold; S.slAtr = r.slAtr; S.rr = r.rr; persist(S);
+      S.threshold = r.threshold; S.slAtr = r.slAtr; S.rr = r.rr;
+      if (r.cooldown != null) S.cooldown = r.cooldown;
+      persist(S);
       st.bt = simulate(st.series, S); st.tab = 'strategi'; return render();
     }
     const a = t.dataset.act;

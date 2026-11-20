@@ -50,7 +50,57 @@ export const DEFAULT_CONFIG = {
       scoreGolden: 0.8, scoreShallow: 0.4, scoreDeep: 0.2, scoreBreakout: 0.6,
     },
   },
+  customMethods: [],   // metode tambahan, diatur dari NdaxTrade Dev
 };
+
+// ---------- Metode tambahan (custom) ----------
+// Tipe dibuat tetap (bukan kode bebas) supaya tiap metode bisa diterjemahkan
+// ke MQL5 oleh src/ea/mql.js dengan hasil yang sama persis dengan mesin ini.
+export const CUSTOM_TYPES = {
+  ema_cross: { label: 'EMA Cross (cepat vs lambat)', params: [
+    { k: 'fast', label: 'EMA cepat', def: 9, int: true },
+    { k: 'slow', label: 'EMA lambat', def: 21, int: true },
+    { k: 'scale', label: 'Skala penuh (%)', def: 0.3 }] },
+  roc: { label: 'Momentum ROC', params: [
+    { k: 'period', label: 'Periode', def: 10, int: true },
+    { k: 'scale', label: 'Skala penuh (%)', def: 1 }] },
+  bollinger: { label: 'Bollinger %B', params: [
+    { k: 'period', label: 'Periode', def: 20, int: true },
+    { k: 'mult', label: 'Std dev', def: 2 }] },
+  stoch: { label: 'Stochastic %K', params: [
+    { k: 'period', label: 'Periode', def: 14, int: true },
+    { k: 'ob', label: 'Jenuh beli (%)', def: 80 },
+    { k: 'os', label: 'Jenuh jual (%)', def: 20 }] },
+  donchian: { label: 'Donchian Breakout', params: [
+    { k: 'period', label: 'Periode', def: 20, int: true }] },
+};
+
+const rid = () => 'cm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+// Normalisasi satu metode tambahan: tipe tidak dikenal dibuang, parameter kosong diisi default.
+export function normCustom(m) {
+  const spec = CUSTOM_TYPES[m?.type];
+  if (!spec) return null;
+  const p = {};
+  for (const q of spec.params) {
+    let v = Number(m.p?.[q.k]);
+    if (!Number.isFinite(v)) v = q.def;
+    if (q.int) v = Math.max(1, Math.round(v));
+    else if (q.k === 'scale' || q.k === 'mult') v = v > 0 ? v : q.def;
+    p[q.k] = v;
+  }
+  const w = Number(m.weight);
+  return {
+    id: String(m.id || rid()),
+    type: m.type,
+    name: String(m.name || spec.label).replace(/[\r\n]/g, ' ').trim().slice(0, 40) || spec.label,
+    enabled: m.enabled !== false,
+    weight: Number.isFinite(w) && w >= 0 ? w : 1,
+    p,
+  };
+}
+
+export const newCustom = (type, name) => normCustom({ type, name, enabled: true, weight: 1, p: {} });
 
 const mergeMap = (d, r) => Object.fromEntries(
   Object.keys(d).map(k => [k, { ...d[k], ...((r && r[k]) || {}) }])
@@ -64,6 +114,7 @@ export function mergeConfig(r) {
     primaryTf: normTf(r.primaryTf) || DEFAULT_CONFIG.primaryTf,
     timeframes: mergeMap(DEFAULT_CONFIG.timeframes, r.timeframes),
     methods: mergeMap(DEFAULT_CONFIG.methods, r.methods),
+    customMethods: Array.isArray(r.customMethods) ? r.customMethods.map(normCustom).filter(Boolean) : [],
   };
 }
 

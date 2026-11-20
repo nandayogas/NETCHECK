@@ -7,6 +7,9 @@ Fitur NdaxTrade di APK utama membaca konfigurasi dari Worker (`GET /api/ndax/con
 - Konfigurasi diatur dari aplikasi **NdaxTrade Dev**, yang sekarang berada di repo **NETCHECK-Developer** (folder `ndaxtrade/`).
 - `src/ndax/config.js` berisi `NDAX_API` (URL Worker) dan nilai default. Jika Worker diganti, ubah juga URL di sini.
 
+## Metode tambahan
+Metode tambahan dibuat di NdaxTrade Dev dan dibaca dari konfigurasi yang sama. Tipe yang didukung dibatasi ke daftar `CUSTOM_TYPES` di `src/ndax/config.js`, karena setiap tipe harus punya padanan di generator MQL5 (`src/ea/mql.js`).
+
 ## Catatan
 - Sinyal berasal dari aturan teknikal dan tidak menjamin hasil. Ini bukan nasihat keuangan.
 - Analisis berjalan saat halaman NdaxTrade terbuka. Android dapat menghentikan WebView di latar belakang.

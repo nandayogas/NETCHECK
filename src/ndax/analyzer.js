@@ -18,6 +18,59 @@ const sgn = x => (x > 0 ? 1 : x < 0 ? -1 : 0);
 const ok = v => Number.isFinite(v);
 export const fmtP = v => Number(v.toFixed(v >= 1000 ? 2 : v >= 1 ? 4 : 6)).toString();
 
+const stdev = xs => {
+  const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+  return Math.sqrt(xs.reduce((a, b) => a + (b - m) * (b - m), 0) / xs.length);
+};
+
+// Skor (-1..+1) satu metode tambahan. Harus identik dengan blok generator di src/ea/mql.js.
+export function customScore(cm, c) {
+  const n = c.length - 1, last = c[n], P = cm.p;
+  if (!last || !(last.c > 0)) return null;
+  const closes = c.map(k => k.c);
+  switch (cm.type) {
+    case 'ema_cross': {
+      const f = ema(closes, P.fast)[n], s = ema(closes, P.slow)[n];
+      if (!ok(f) || !ok(s)) return null;
+      const d = (f - s) / last.c * 100;
+      return { score: d / P.scale, note: `EMA${P.fast} ${f > s ? '>' : '<'} EMA${P.slow} (${d >= 0 ? '+' : ''}${d.toFixed(3)}%)` };
+    }
+    case 'roc': {
+      if (n < P.period || !(c[n - P.period].c > 0)) return null;
+      const past = c[n - P.period].c;
+      const r = (last.c - past) / past * 100;
+      return { score: r / P.scale, note: `ROC ${P.period} ${r >= 0 ? '+' : ''}${r.toFixed(2)}%` };
+    }
+    case 'bollinger': {
+      if (c.length < P.period) return null;
+      const win = closes.slice(-P.period);
+      const m = win.reduce((a, b) => a + b, 0) / P.period, sd = stdev(win);
+      if (!(sd > 0)) return { score: 0, note: 'Bollinger datar' };
+      const lo = m - P.mult * sd, hi = m + P.mult * sd;
+      const pb = (last.c - lo) / (hi - lo);
+      return { score: (pb - 0.5) * 2, note: `%B ${(pb * 100).toFixed(0)}%` };
+    }
+    case 'stoch': {
+      if (c.length < P.period) return null;
+      const win = c.slice(-P.period);
+      const hh = Math.max(...win.map(k => k.h)), ll = Math.min(...win.map(k => k.l));
+      const k = hh > ll ? (last.c - ll) / (hh - ll) * 100 : 50;
+      const s = k >= P.ob ? -0.3 : k <= P.os ? 0.3 : (k - 50) / 25;
+      return { score: s, note: `%K ${k.toFixed(1)}` };
+    }
+    case 'donchian': {
+      if (n < P.period) return null;
+      const prev = c.slice(n - P.period, n);
+      const hi = Math.max(...prev.map(k => k.h)), lo = Math.min(...prev.map(k => k.l));
+      if (last.c > hi) return { score: 1, note: `Breakout di atas ${fmtP(hi)}` };
+      if (last.c < lo) return { score: -1, note: `Breakdown di bawah ${fmtP(lo)}` };
+      const pos = hi > lo ? (last.c - lo) / (hi - lo) : 0.5;
+      return { score: (pos * 2 - 1) * 0.5, note: `Dalam channel ${(pos * 100).toFixed(0)}%` };
+    }
+  }
+  return null;
+}
+
 // Parameter sinyal per timeframe: nilai override jika diisi, selain itu nilai global.
 const ov = (v, g) => (v == null || v === '' || !Number.isFinite(Number(v)) ? g : Number(v));
 export const sigFor = (t, cfg) => ({
@@ -184,6 +237,15 @@ export function analyzeTf(c, cfg) {
       else if (retr < F.goldenMin) addF('fibonacci', up ? F.scoreShallow : -F.scoreShallow, `Koreksi dangkal ${pct}%`);
       else addF('fibonacci', up ? -F.scoreDeep : F.scoreDeep, `Koreksi dalam ${pct}%`);
     }
+  }
+
+  // Metode tambahan (dibuat di NdaxTrade Dev): ikut dihitung dan dibobot seperti metode bawaan.
+  for (const cm of cfg.customMethods || []) {
+    if (!cm.enabled) continue;
+    const cs = customScore(cm, c);
+    if (!cs) continue;
+    const sc = clamp(cs.score);
+    out.push({ id: cm.id, label: cm.name, score: sc, weight: cm.weight, note: cs.note, levels: levelOf(sc) });
   }
 
   const wSum = out.reduce((a, r) => a + r.weight, 0);
