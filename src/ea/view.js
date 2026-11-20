@@ -160,6 +160,7 @@ export function eaPg(el) {
       <div class="ea-grid2">
         ${f('Jarak pending (×ATR)', 'stopOff', { step: 0.1, min: 0 })}
         ${f('Kedaluwarsa (bar)', 'expiry', { step: 1, min: 1 })}
+        ${f('Pending ikut pergerakan candle', 'follow', { type: 'check' })}
       </div>
     </section>` : ''}
     <section class="ea-card">

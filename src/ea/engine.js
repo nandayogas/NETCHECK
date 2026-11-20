@@ -43,7 +43,7 @@ export function defaultsFromNetcheck(cfg = cfgFromCache()) {
 
 // ---------- Mode Swing / Scalping ----------
 // Setiap mode punya set pengaturannya sendiri. Berpindah mode menyimpan set aktif lalu memuat set tujuan.
-export const MODE_FIELDS = ['primaryTf', 'tfs', 'threshold', 'slAtr', 'rr', 'cooldown', 'maxPos', 'maxSpread', 'trail', 'closeOpposite', 'session', 'stopOff', 'expiry', 'be'];
+export const MODE_FIELDS = ['primaryTf', 'tfs', 'threshold', 'slAtr', 'rr', 'cooldown', 'maxPos', 'maxSpread', 'trail', 'closeOpposite', 'session', 'stopOff', 'expiry', 'be', 'follow'];
 const clone = v => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const pickMode = s => Object.fromEntries(MODE_FIELDS.map(k => [k, clone(s[k])]));
 
@@ -79,7 +79,7 @@ export const STRADDLE_TFS = { M1: 1.0 };
 export function straddlePreset(s) {
   const t = {
     ...s, primaryTf: 'M1', threshold: 0, slAtr: 1.0, rr: 1.0, cooldown: 1, maxPos: 1, maxSpread: 20,
-    stopOff: 0.5, expiry: 5,
+    stopOff: 0.5, expiry: 5, follow: true,
     trail: { on: true, atrMult: 0.6, startRR: 0.5 }, closeOpposite: false, session: { on: true, start: 7, end: 20 },
   };
   t.tfs = {};
@@ -104,6 +104,8 @@ export function ensureModes(s) {
   }
   for (const m of Object.keys(PRESETS)) if (!s.modes[m]) s.modes[m] = PRESETS[m](s);
   for (const m of Object.keys(s.modes)) if (!s.modes[m].be) s.modes[m].be = { on: true, start: 1, buffer: 2 };
+  for (const m of Object.keys(s.modes)) if (s.modes[m].follow == null) s.modes[m].follow = true;
+  if (s.follow == null) s.follow = true;
   if (!MODES.includes(s.mode)) s.mode = 'swing';
   return s;
 }
@@ -114,6 +116,7 @@ export function switchMode(s, to) {
   s.modes[s.mode] = pickMode(s);
   Object.assign(s, clone(s.modes[to] || (PRESETS[to] ? PRESETS[to](s) : s.modes.swing)));
   if (!s.be) s.be = { on: true, start: 1, buffer: 2 };
+  if (s.follow == null) s.follow = true;
   s.mode = to;
   return s;
 }

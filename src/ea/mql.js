@@ -136,6 +136,7 @@ input int    InpExpiryBars = ${n(s.expiry ?? 5)};         // Pending kedaluwarsa
 input bool   InpBeOn       = ${b((s.be || {}).on ?? true)};         // Break-even: pindahkan SL ke impas
 input double InpBeStart    = ${n((s.be || {}).start ?? 1)};        // Break-even mulai saat profit >= nilai ini x risiko awal
 input int    InpBeBuffer   = ${n((s.be || {}).buffer ?? 2)};        // Buffer di atas/bawah harga entri (points)
+input bool   InpFollow     = ${b(s.follow ?? true)};         // Pending ikut candle: dibatalkan dan dipasang ulang di harga baru tiap bar
 
 //--- Parameter metode (default dari konfigurasi NetCheck)
 input bool   InpEMA_On = ${b(M.ema.enabled)};     input double InpEMA_W = ${n(M.ema.weight)};
@@ -631,7 +632,8 @@ void StraddleTick()
    if(bt == 0 || bt == g_lastBar) return;      // pasang pending sekali per bar baru
    g_lastBar = bt;
    if(!InSession()) { CancelPending(); return; }
-   if(CountPending() > 0) return;              // kedua sisi masih menunggu; kedaluwarsa diatur waktu
+   if(InpFollow) CancelPending();              // ikut candle: pending lama dibatalkan, dipasang ulang di harga baru
+   else if(CountPending() > 0) return;         // tanpa ikut: pending dibiarkan sampai kedaluwarsa
    int secs = PeriodSeconds(InpPrimaryTf);
    if(g_lastEntry > 0 && secs > 0 && (bt - g_lastEntry) / secs < InpCooldown) return;
    if(InpMaxSpread > 0)
