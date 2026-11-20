@@ -4,6 +4,7 @@
 import { TF_ORDER } from '../ndax/config.js';
 import { sigFor } from '../ndax/analyzer.js';
 import { CUSTOM_TYPES } from '../ndax/config.js';
+import { buildTrailRev } from './trev.js';
 
 const PERIOD = { M1: 'PERIOD_M1', M5: 'PERIOD_M5', M15: 'PERIOD_M15', M30: 'PERIOD_M30', H1: 'PERIOD_H1', H4: 'PERIOD_H4', D1: 'PERIOD_D1' };
 const b = v => (v ? 'true' : 'false');
@@ -71,6 +72,7 @@ const cmCalc = (cm, i) => {
 };
 
 export function buildMql5(s, cfg) {
+  if (s.mode === 'trev') return buildTrailRev(s);   // mode Trailing Reverse punya generator sendiri (tanpa analisa)
   const M = cfg.methods;
   const customs = (cfg.customMethods || []).filter(cm => CUSTOM_TYPES[cm.type]);
   const name = safeName(s.name);

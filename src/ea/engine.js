@@ -2,6 +2,7 @@
 // Semua sinyal dihitung oleh analyzeAll() milik NetCheck (src/ndax/analyzer.js) tanpa diubah.
 import { mergeConfig, TF_ORDER } from '../ndax/config.js';
 import { analyzeAll } from '../ndax/analyzer.js';
+import { REV_DEFAULTS } from './trev.js';
 
 export const TF_MS = { M1: 6e4, M5: 3e5, M15: 9e5, M30: 18e5, H1: 36e5, H4: 144e5, D1: 864e5 };
 const INTERVAL = { M1: '1m', M5: '5m', M15: '15m', M30: '30m', H1: '1h', H4: '4h', D1: '1d' };
@@ -86,12 +87,26 @@ export function straddlePreset(s) {
   return pickMode(t);
 }
 
+// Preset Trailing Reverse: stop-and-reverse per tick tanpa analisa (lihat src/ea/trev.js). Pengaturannya ada di s.rev.
+// Set mode di sini hanya menyimpan nilai dasar; kolom yang dipakai mode ini bukan timeframe/ATR.
+export function trevPreset(s) {
+  const t = {
+    ...s, primaryTf: 'M1', threshold: 0, cooldown: 0, maxPos: 1, maxSpread: 50, closeOpposite: false,
+    trail: { ...s.trail, on: false }, be: { on: false, start: 1, buffer: 2 }, follow: false, addWhile: false,
+  };
+  t.tfs = {};
+  for (const k of TF_ORDER) t.tfs[k] = { on: k === 'M1', weight: s.tfs[k].weight };
+  return pickMode(t);
+}
+
 // Preset per mode selain swing (yang memakai pengaturan NetCheck).
-export const PRESETS = { scalp: scalpPreset, fast: fastPreset, straddle: straddlePreset };
-export const MODES = ['swing', 'scalp', 'fast', 'straddle'];
+export const PRESETS = { scalp: scalpPreset, fast: fastPreset, straddle: straddlePreset, trev: trevPreset };
+export const MODES = ['swing', 'scalp', 'fast', 'straddle', 'trev'];
 
 // Pastikan semua set mode ada. Dipanggil saat memuat pengaturan.
 export function ensureModes(s) {
+  s.rev = { ...REV_DEFAULTS, ...(s.rev || {}) };   // pengaturan Trailing Reverse (berlaku lintas mode)
+  if (s.bt && s.bt.barsRev == null) s.bt.barsRev = 3000;   // jumlah bar M1 untuk backtest Trailing Reverse
   if (s.useAnalysis == null) s.useAnalysis = true;   // false = tanpa analisa NdaxTrade (pasang BUY STOP + SELL STOP)
   if (!s.be) s.be = { on: true, start: 1, buffer: 2 };   // SL ke impas saat profit >= start x risiko, + buffer (points)
   if (s.stopOff == null) s.stopOff = 0.5;

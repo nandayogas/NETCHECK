@@ -59,3 +59,14 @@ Membuat Expert Advisor MT5 (XAUUSD, BUY/SELL otomatis) dari mesin analisis NetCh
 - **AI Strategy Generator:** optimasi ambang/SL/RR lewat backtest, dengan data uji terpisah (70/30).
 - **Kode & EX5:** unduh `.mq5` dan skrip `compile_*.bat`. EX5 hanya bisa dibuat MetaEditor (Windows/Winlator); opsional isi URL layanan compile HTTPS (POST `{filename, source}` -> EX5 biner atau `{ex5: base64, log}`).
 - Kode ada di `src/ea/` (`mql.js` generator, `engine.js` backtest, `view.js` dashboard). Dependensi baru: `@capacitor/filesystem` dan `@capacitor/share` (untuk menyimpan/membagikan file di Android). Jalankan `npm install` lagi.
+
+## 8. Mode Trailing Reverse (EA Builder > Strategi > Trailing Reverse)
+Meniru pola order stop-and-reverse: selalu 1 posisi + 1 pending stop berlawanan yang menempel dekat harga dan ikut bergerak.
+- **Awal:** EA memasang BUY STOP di atas dan SELL STOP di bawah harga (jarak `Jarak pending`, default 3 pip). Yang kena duluan jadi posisi pertama, yang lain dibatalkan.
+- **Setelah posisi terbuka:** pending berlawanan dipasang tepat di belakang harga dan ikut searah profit (BUY STOP hanya turun, SELL STOP hanya naik). Pending kena = posisi lama ditutup dan posisi baru berbalik arah.
+- **SL:** SL awal 15 pip. Begitu profit mencapai `Mulai ikut saat profit` (default 10 pip), SL ikut harga dengan jarak `Jarak SL dari harga` (default 5 pip), minimal `Kunci minimal di atas entri` di atas entri, dan tidak pernah mundur.
+- **Lot tetap.** Tanpa analisa NetCheck dan tidak bergantung timeframe chart (logika per tick).
+- **Pengaman:** filter spread, maksimal balik arah per jam, batas rugi harian (% saldo). Akun hedging: posisi lama ditutup EA saat posisi balik terbuka; akun netting: volume pending balik = 2 x lot.
+- **Satuan pip:** XAUUSD 2 digit, 1 pip = 10 points = 0,10 USD (ubah `1 pip = berapa points` bila broker berbeda).
+- **Backtest di aplikasi:** candle M1 dipecah menjadi tick buatan (random walk yang menyentuh high dan low tiap candle). Ini perkiraan kasar, sangat peka terhadap spread, slippage, dan jeda eksekusi. Uji di MT5 Strategy Tester (Every tick based on real ticks) dan akun demo sebelum memakai uang asli.
+- Kode: `src/ea/trev.js` (default, generator MQL5, simulator).

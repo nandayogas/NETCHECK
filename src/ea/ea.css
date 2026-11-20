@@ -78,3 +78,4 @@
 .ea-modes button small{font-weight:400;font-size:11px;color:var(--ea-mut)}
 .ea-modes button.on{border-color:var(--ea-cy);color:var(--ea-cy);box-shadow:0 0 14px rgba(0,229,255,.25);background:rgba(0,229,255,.08)}
 .ea-modes button:focus-visible{outline:2px solid var(--ea-cy);outline-offset:2px}
+.ea-modes button:last-child:nth-child(odd){grid-column:1/-1}

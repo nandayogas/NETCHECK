@@ -7,11 +7,12 @@ import { analyzeAll, LABELS, fmtP } from '../ndax/analyzer.js';
 import { defaultsFromNetcheck, cfgFromCache, analysisCfg, fetchHistory, loadData, precompute, simulate, optimize, btTfs, DATA_SYMBOLS, ensureModes, switchMode, scalpPreset, fastPreset, gridSize, GRIDS } from './engine.js';
 
 // Label per mode untuk tampilan (kunci sama dengan S.mode).
-const MODE_NAME = { swing: 'Swing', scalp: 'Scalping', fast: 'Fast Signal Conservative', straddle: 'Stop Order Straddle' };
+const MODE_NAME = { swing: 'Swing', scalp: 'Scalping', fast: 'Fast Signal Conservative', straddle: 'Stop Order Straddle', trev: 'Trailing Reverse' };
 const MODE_GRID = { swing: 'Swing', scalp: 'scalping', fast: 'fast signal conservative' };
 // Tanpa analisa = EA tidak menunggu sinyal NdaxTrade; ia memasang BUY STOP + SELL STOP (sama seperti straddle).
 const noAnalysis = S => S.mode === 'straddle' || S.useAnalysis === false;
 import { buildMql5, precheck, compileBat, fileBase } from './mql.js';
+import { simulateTrev } from './trev.js';
 import './ea.css';
 
 const KEY = 'ea.settings.v1';
@@ -101,10 +102,13 @@ export function eaPg(el) {
         <button type="button" data-mode="scalp" class="${S.mode === 'scalp' ? 'on' : ''}" aria-pressed="${S.mode === 'scalp'}">Scalping<small>Trade sering, SL ketat</small></button>
         <button type="button" data-mode="fast" class="${S.mode === 'fast' ? 'on' : ''}" aria-pressed="${S.mode === 'fast'}">Fast Signal Conservative<small>Sinyal cepat, ambang ketat, 1 posisi</small></button>
         <button type="button" data-mode="straddle" class="${S.mode === 'straddle' ? 'on' : ''}" aria-pressed="${S.mode === 'straddle'}">Stop Order Straddle<small>BUY STOP + SELL STOP, SL ATR</small></button>
+        <button type="button" data-mode="trev" class="${S.mode === 'trev' ? 'on' : ''}" aria-pressed="${S.mode === 'trev'}">Trailing Reverse<small>Pending ikut harga, balik arah, SL ikut</small></button>
       </div>
-      ${S.mode === 'straddle' ? '' : f('Pakai analisa NdaxTrade untuk entri', 'useAnalysis', { type: 'check' })}
-      ${S.useAnalysis === false && S.mode !== 'straddle'
+      ${S.mode === 'straddle' || S.mode === 'trev' ? '' : f('Pakai analisa NdaxTrade untuk entri', 'useAnalysis', { type: 'check' })}
+      ${S.useAnalysis === false && S.mode !== 'straddle' && S.mode !== 'trev'
         ? `<p class="ea-hint">Analisa NdaxTrade mati: EA tidak menunggu sinyal. Setiap bar baru EA memasang BUY STOP dan SELL STOP di sekitar harga, dengan SL, RR, jarak pending, dan kedaluwarsa dari mode ${esc(MODE_NAME[S.mode] || 'Swing')}. Hasilnya tidak diuji di aplikasi; gunakan MT5 Strategy Tester.</p>`
+        : S.mode === 'trev'
+        ? `<p class="ea-hint">Trailing Reverse (tanpa analisa): saat dinyalakan EA memasang BUY STOP di atas dan SELL STOP di bawah harga (jarak ${S.rev.distPips} pip). Yang kena duluan jadi posisi, lalu pending berlawanan menempel di belakang harga dan ikut bergerak. Pending kena = posisi balik arah. SL ikut harga setelah profit ${S.rev.trailStartPips} pip. Lot tetap. Logikanya per tick, jadi timeframe chart tidak berpengaruh. Backtest di aplikasi hanya perkiraan kasar dari candle M1; uji di MT5 Strategy Tester (Every tick based on real ticks) dan akun demo dulu.</p>`
         : S.mode === 'scalp'
         ? `<p class="ea-hint">Preset scalping: timeframe utama ${sp.primaryTf}, SL ${dec(sp.slAtr)}×ATR, RR ${dec(sp.rr)}, jeda ${sp.cooldown} bar, maks ${sp.maxPos} posisi, spread maks ${sp.maxSpread} point. Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Hasil scalping sangat peka terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
         : S.mode === 'fast'
@@ -117,6 +121,16 @@ export function eaPg(el) {
         <label class="ea-sw"><span>${k}${S.primaryTf === k ? ' <em>UTAMA</em>' : ''}</span><input type="checkbox" data-p="tfs.${k}.on" ${S.tfs[k].on ? 'checked' : ''} ${S.primaryTf === k ? 'disabled' : ''}><i></i></label>
         <input type="number" inputmode="decimal" step="0.1" min="0" data-p="tfs.${k}.weight" value="${S.tfs[k].weight}" aria-label="Bobot ${k}"></div>`).join('');
     const lv = st.live;
+    if (S.mode === 'trev') return `${modeCard}
+    <section class="ea-card">
+      <h3>Instrumen & platform</h3>
+      <div class="ea-grid2">
+        <div class="ea-f"><span>Platform</span><div class="ea-static">MetaTrader 5</div></div>
+        ${f('Simbol di broker', 'symbol', { type: 'text', ph: 'XAUUSD' })}
+        ${f('Data backtest', 'dataSym', { opts: DATA_SYMBOLS.map(d => [d.sym, d.label]) })}
+      </div>
+      <p class="ea-hint">Mode ini tidak memakai timeframe, bobot, atau metode NetCheck. Atur jarak pending dan SL di tab Risiko.</p>
+    </section>`;
     return `${modeCard}
     <section class="ea-card">
       <h3>Instrumen & platform</h3>
@@ -154,7 +168,41 @@ export function eaPg(el) {
   };
 
   // ---------- tab Risiko ----------
-  const tabRisiko = () => `${noAnalysis(S) ? `
+  const tabRisikoTrev = () => `
+    <section class="ea-card">
+      <h3>Trailing Reverse <small>pending menempel harga</small></h3>
+      <div class="ea-grid2">
+        ${f('Jarak pending dari harga (pip)', 'rev.distPips', { step: 0.5, min: 0.5 })}
+        ${f('Geser minimal (pip)', 'rev.stepPips', { step: 0.5, min: 0.1 })}
+        ${f('1 pip = berapa points', 'rev.pipPoints', { step: 1, min: 1 })}
+        ${f('Maks balik arah per jam', 'rev.maxFlipsHour', { step: 1, min: 0 })}
+      </div>
+      ${f('Pending kena = balik arah', 'rev.reverse', { type: 'check' })}
+      <p class="ea-hint">XAUUSD 2 digit: 1 pip = 10 points = 0,10 USD, jadi 3 pip = 0,30 USD. Geser minimal menjaga EA tidak membanjiri server broker dengan modifikasi order; di bawah 1 pip broker bisa menolak (Too many requests). Maks balik arah per jam: 0 = tanpa batas.</p>
+    </section>
+    <section class="ea-card">
+      <h3>Stop loss ikut harga</h3>
+      <div class="ea-grid2">
+        ${f('SL awal (pip)', 'rev.slPips', { step: 1, min: 1 })}
+        ${f('Mulai ikut saat profit ≥ (pip)', 'rev.trailStartPips', { step: 1, min: 0 })}
+        ${f('Jarak SL dari harga (pip)', 'rev.trailDistPips', { step: 0.5, min: 0.5 })}
+        ${f('Kunci minimal di atas entri (pip)', 'rev.trailBufPips', { step: 0.5, min: 0 })}
+      </div>
+      ${f('SL ikut harga', 'rev.trailOn', { type: 'check' })}
+      <p class="ea-hint">Setelah posisi terbuka, SL awal dipasang. Begitu profit mencapai nilai "mulai ikut", SL naik (BUY) atau turun (SELL) mengikuti harga dengan jarak di atas, dan tidak pernah mundur. Catatan: pending balik arah lebih rapat daripada jarak SL, jadi biasanya pending yang kena lebih dulu; SL berperan sebagai pengaman bila pending gagal atau saat "balik arah" dimatikan.</p>
+    </section>
+    <section class="ea-card">
+      <h3>Lot & pengaman</h3>
+      <div class="ea-grid2">
+        ${f('Lot tetap', 'lot', { step: 0.01, min: 0.01 })}
+        ${f('Batas rugi harian (% saldo)', 'rev.dailyLossPct', { step: 0.5, min: 0 })}
+        ${f('Spread maks (points)', 'maxSpread', { step: 1, min: 0 })}
+        ${f('Slippage (points)', 'slippage', { step: 1, min: 0 })}
+        ${f('Magic number', 'magic', { step: 1, min: 1 })}
+      </div>
+      <p class="ea-hint">Batas rugi harian 0 = mati. Bila tercapai, EA menutup semua posisi, menghapus pending, dan berhenti sampai hari berikutnya (waktu server broker). Spread melebihi batas = EA tidak memasang atau menggeser pending.</p>
+    </section>`;
+  const tabRisiko = () => S.mode === 'trev' ? tabRisikoTrev() : `${noAnalysis(S) ? `
     <section class="ea-card">
       <h3>Stop Order Straddle</h3>
       <div class="ea-grid2">
@@ -232,7 +280,30 @@ export function eaPg(el) {
       <div><small>Rata-rata menang</small><b class="buy">${num(r.avgWin)}</b></div>
       <div><small>Rata-rata kalah</small><b class="sell">${num(r.avgLoss)}</b></div>
     </div>`;
+  const tabBacktestTrev = () => {
+    const b = st.bt;
+    return `
+    <section class="ea-card">
+      <h3>Backtest Trailing Reverse <small>perkiraan kasar</small></h3>
+      <div class="ea-grid2">
+        ${f('Jumlah bar M1', 'bt.barsRev', { n: 1, opts: [[1000, '1.000 bar (±17 jam)'], [3000, '3.000 bar (±2 hari)'], [6000, '6.000 bar (±4 hari)']] })}
+        ${f('Saldo awal (USD)', 'bt.balance', { step: 100, min: 100 })}
+        ${f('Spread (USD / oz)', 'bt.spread', { step: 0.01, min: 0 })}
+      </div>
+      <p class="ea-hint">Data candle M1 ${esc(S.dataSym)} dipecah jadi tick buatan acak yang menyentuh high dan low tiap candle (data candle tidak menyimpan urutan harga di dalamnya; hasilnya sama setiap dijalankan). Spread dihitung di setiap masuk dan keluar. Mode ini sangat peka terhadap spread, slippage, dan jeda eksekusi broker, jadi anggap hasil ini gambaran kasar, bukan prediksi.</p>
+      <button class="ea-btn" data-act="bt-trev" ${st.busy ? 'disabled' : ''}>${st.busy === 'bt' ? esc(st.msg || 'Memproses…') : 'Jalankan backtest'}</button>
+      ${st.err ? `<div class="ea-err">${esc(st.err)}</div>` : ''}
+    </section>
+    ${b ? `<section class="ea-card">
+      <h3>Hasil backtest</h3>
+      ${curveSvg(b.curve)}
+      ${stats(b)}
+      <p class="ea-hint">Balik arah rata-rata ${num(b.flipsPerHour, 1)} per jam${b.halted ? ' · berhenti karena batas rugi harian' : ''}. Setiap balik arah menanggung spread; kalau profit rata-rata per trade kecil dibanding spread, hasil live bisa jauh lebih buruk dari ini.</p>
+      <div class="ea-tl"><div class="ea-sect">10 trade terakhir</div>${b.trades.slice(-10).reverse().map(t => `<div class="ea-tr"><span class="${t.dir > 0 ? 'buy' : 'sell'}">${t.dir > 0 ? 'BUY' : 'SELL'}</span><span>${fmtP(t.entry)} → ${fmtP(t.exit)} · ${esc(t.why)}</span><b class="${t.pnl >= 0 ? 'buy' : 'sell'}">${t.pnl >= 0 ? '+' : ''}${num(t.pnl)}</b></div>`).join('') || '<p class="ea-hint">Tidak ada trade pada periode ini.</p>'}</div>
+    </section>` : ''}`;
+  };
   const tabBacktest = () => {
+    if (S.mode === 'trev') return tabBacktestTrev();
     if (noAnalysis(S)) return `<section class="ea-card"><h3>Backtest tidak tersedia</h3><p class="ea-hint">Mode tanpa analisa (Stop Order Straddle) belum punya simulator di aplikasi. Uji di MT5 Strategy Tester (model Every tick based on real ticks) dengan pengaturan dari halaman ini.</p></section>`;
     const tfs = btTfs(S), skipped = TF_ORDER.filter(k => S.tfs[k].on && !tfs.includes(k));
     const b = st.bt;
@@ -334,7 +405,7 @@ export function eaPg(el) {
     if (!alive()) return;
     st.busy = ''; st.msg = ''; render();
   };
-  const progress = m => { if (alive()) { st.msg = m; const b = root.querySelector('[data-act="bt"]'); if (b) b.textContent = m; } };
+  const progress = m => { if (alive()) { st.msg = m; const b = root.querySelector('[data-act="bt"],[data-act="bt-trev"]'); if (b) b.textContent = m; } };
 
   const ensureSeries = async () => {
     if (st.series) return st.series;
@@ -369,6 +440,13 @@ export function eaPg(el) {
       const r = analyzeAll(data, ac);
       if (!r) throw new Error('Data belum cukup untuk dianalisis');
       st.live = r;
+    });
+    if (a === 'bt-trev') return run('bt', async () => {
+      if (!st.trevBars) { progress('Mengambil data M1…'); st.trevBars = await fetchHistory(S.dataSym, 'M1', S.bt.barsRev || 3000); }
+      if (st.trevBars.length < 200) throw new Error('Data M1 terlalu sedikit');
+      progress('Mensimulasikan…');
+      await new Promise(r => setTimeout(r, 30));
+      st.bt = simulateTrev(st.trevBars, S);
     });
     if ((a === 'bt' || a === 'opt') && noAnalysis(S)) { st.err = 'Backtest dan optimasi belum tersedia untuk mode tanpa analisa. Uji di MT5 Strategy Tester.'; return render(); }
     if (a === 'bt') return run('bt', async () => {
@@ -408,6 +486,7 @@ export function eaPg(el) {
     if (p === 'primaryTf') S.tfs[v].on = true;
     if (p === 'name') S.name = fileBase(S);
     if (/^(tfs|primaryTf|sensitivity|dataSym|bt\.bars)/.test(p)) { st.series = null; st.loaded = null; st.bt = null; st.opt = null; }
+    if (/^(dataSym|bt\.barsRev)/.test(p)) st.trevBars = null;
     st.ex5 = null; st.compileLog = '';
     persist(S);
     if (x.tagName === 'SELECT' || x.type === 'checkbox' || x.dataset.p === 'name') render();
