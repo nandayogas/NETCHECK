@@ -34,7 +34,6 @@ export function defaultsFromNetcheck(cfg = cfgFromCache()) {
     slAtr: cfg.signal.atrSlMult, rr: cfg.signal.rr,
     trail: { on: true, atrMult: 1, startRR: 1 },
     maxPos: 3, cooldown: 3, closeOpposite: true, maxSpread: 50, slippage: 30,
-    session: { on: false, start: 7, end: 20 },   // jam UTC; hanya membatasi entri baru
     mode: 'swing',
     bt: { bars: 1000, balance: 1000, spread: 0.25 },
     compileUrl: '',
@@ -43,7 +42,7 @@ export function defaultsFromNetcheck(cfg = cfgFromCache()) {
 
 // ---------- Mode Swing / Scalping ----------
 // Setiap mode punya set pengaturannya sendiri. Berpindah mode menyimpan set aktif lalu memuat set tujuan.
-export const MODE_FIELDS = ['primaryTf', 'tfs', 'threshold', 'slAtr', 'rr', 'cooldown', 'maxPos', 'maxSpread', 'trail', 'closeOpposite', 'session', 'stopOff', 'expiry', 'be', 'follow', 'addWhile'];
+export const MODE_FIELDS = ['primaryTf', 'tfs', 'threshold', 'slAtr', 'rr', 'cooldown', 'maxPos', 'maxSpread', 'trail', 'closeOpposite', 'stopOff', 'expiry', 'be', 'follow', 'addWhile'];
 const clone = v => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const pickMode = s => Object.fromEntries(MODE_FIELDS.map(k => [k, clone(s[k])]));
 
@@ -52,7 +51,7 @@ export const SCALP_TFS = { M1: 0.6, M5: 1.0, M15: 1.0, M30: 0.6, H1: 0.4 };
 export function scalpPreset(s) {
   const t = {
     ...s, primaryTf: 'M5', threshold: 0.3, slAtr: 0.8, rr: 1.2, cooldown: 1, maxPos: 2, maxSpread: 20,
-    trail: { on: true, atrMult: 0.6, startRR: 0.5 }, closeOpposite: true, session: { on: true, start: 7, end: 20 },
+    trail: { on: true, atrMult: 0.6, startRR: 0.5 }, closeOpposite: true,
   };
   t.tfs = {};
   for (const k of TF_ORDER) t.tfs[k] = { on: k in SCALP_TFS, weight: SCALP_TFS[k] ?? s.tfs[k].weight };
@@ -65,7 +64,7 @@ export const FAST_TFS = { M5: 1.0, M15: 1.0, M30: 0.8, H1: 0.6 };
 export function fastPreset(s) {
   const t = {
     ...s, primaryTf: 'M15', threshold: 0.45, slAtr: 1.2, rr: 1.5, cooldown: 4, maxPos: 1, maxSpread: 20,
-    trail: { on: true, atrMult: 1, startRR: 1 }, closeOpposite: true, session: { on: true, start: 7, end: 20 },
+    trail: { on: true, atrMult: 1, startRR: 1 }, closeOpposite: true,
   };
   t.tfs = {};
   for (const k of TF_ORDER) t.tfs[k] = { on: k in FAST_TFS, weight: FAST_TFS[k] ?? s.tfs[k].weight };
@@ -80,7 +79,7 @@ export function straddlePreset(s) {
   const t = {
     ...s, primaryTf: 'M1', threshold: 0, slAtr: 1.0, rr: 1.0, cooldown: 1, maxPos: 1, maxSpread: 20,
     stopOff: 0.5, expiry: 5, follow: true, addWhile: false,
-    trail: { on: true, atrMult: 0.6, startRR: 0.5, candle: true }, closeOpposite: false, session: { on: true, start: 7, end: 20 },
+    trail: { on: true, atrMult: 0.6, startRR: 0.5, candle: true }, closeOpposite: false,
   };
   t.tfs = {};
   for (const k of TF_ORDER) t.tfs[k] = { on: k in STRADDLE_TFS, weight: STRADDLE_TFS[k] ?? s.tfs[k].weight };
@@ -93,7 +92,6 @@ export const MODES = ['swing', 'scalp', 'fast', 'straddle'];
 
 // Pastikan semua set mode ada. Dipanggil saat memuat pengaturan.
 export function ensureModes(s) {
-  if (!s.session) s.session = { on: false, start: 7, end: 20 };
   if (s.useAnalysis == null) s.useAnalysis = true;   // false = tanpa analisa NdaxTrade (pasang BUY STOP + SELL STOP)
   if (!s.be) s.be = { on: true, start: 1, buffer: 2 };   // SL ke impas saat profit >= start x risiko, + buffer (points)
   if (s.stopOff == null) s.stopOff = 0.5;
@@ -232,12 +230,6 @@ export function simulate(series, s, from = 0, to = series.length) {
     bal += pnl;
     trades.push({ dir: p.dir, entry: p.entry, exit: price, lots: p.lots, pnl, t0: p.t0, t1: t, why });
   };
-  const sess = s.session;
-  const inSession = t => {
-    if (!sess || !sess.on) return true;
-    const h = new Date(t).getUTCHours();
-    return sess.start <= sess.end ? h >= sess.start && h < sess.end : h >= sess.start || h < sess.end;
-  };
   for (let i = from; i < to; i++) {
     const b = series[i];
     // 1) kelola posisi pada bar ini (SL lebih dulu bila SL dan TP tersentuh di bar yang sama)
@@ -264,7 +256,7 @@ export function simulate(series, s, from = 0, to = series.length) {
       const allowed = sig !== 0 && !(d === 1 && sig < 0) && !(d === 2 && sig > 0);
       if (allowed) {
         if (s.closeOpposite) for (let k = open.length - 1; k >= 0; k--) if (open[k].dir === -sig) { close(open[k], sig > 0 ? b.o + spread : b.o, b.t, 'Balik'); open.splice(k, 1); }
-        if (open.length < s.maxPos && i - lastEntry >= s.cooldown && inSession(b.t)) {
+        if (open.length < s.maxPos && i - lastEntry >= s.cooldown) {
           const risk = b.atr * s.slAtr;
           const entry = sig > 0 ? b.o + spread : b.o;
           let lots = s.lot;

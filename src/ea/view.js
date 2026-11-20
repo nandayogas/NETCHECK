@@ -26,7 +26,7 @@ function loadSettings() {
   try {
     const sv = JSON.parse(localStorage.getItem(KEY));
     if (sv) {
-      const m = { ...base, ...sv, trail: { ...base.trail, ...sv.trail }, bt: { ...base.bt, ...sv.bt }, tfs: { ...base.tfs }, session: { ...base.session, ...sv.session } };
+      const m = { ...base, ...sv, trail: { ...base.trail, ...sv.trail }, bt: { ...base.bt, ...sv.bt }, tfs: { ...base.tfs } };
       for (const k of TF_ORDER) m.tfs[k] = { ...base.tfs[k], ...(sv.tfs && sv.tfs[k]) };
       return ensureModes(m);
     }
@@ -106,9 +106,9 @@ export function eaPg(el) {
       ${S.useAnalysis === false && S.mode !== 'straddle'
         ? `<p class="ea-hint">Analisa NdaxTrade mati: EA tidak menunggu sinyal. Setiap bar baru EA memasang BUY STOP dan SELL STOP di sekitar harga, dengan SL, RR, jarak pending, dan kedaluwarsa dari mode ${esc(MODE_NAME[S.mode] || 'Swing')}. Hasilnya tidak diuji di aplikasi; gunakan MT5 Strategy Tester.</p>`
         : S.mode === 'scalp'
-        ? `<p class="ea-hint">Preset scalping: timeframe utama ${sp.primaryTf}, SL ${dec(sp.slAtr)}×ATR, RR ${dec(sp.rr)}, jeda ${sp.cooldown} bar, maks ${sp.maxPos} posisi, spread maks ${sp.maxSpread} point, dan entri hanya di jam sesi (UTC). Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Hasil scalping sangat peka terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
+        ? `<p class="ea-hint">Preset scalping: timeframe utama ${sp.primaryTf}, SL ${dec(sp.slAtr)}×ATR, RR ${dec(sp.rr)}, jeda ${sp.cooldown} bar, maks ${sp.maxPos} posisi, spread maks ${sp.maxSpread} point. Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Hasil scalping sangat peka terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
         : S.mode === 'fast'
-          ? `<p class="ea-hint">Preset Fast Signal Conservative: timeframe utama ${fp.primaryTf}, ambang sinyal ${dec(fp.threshold)} (lebih ketat dari scalping), SL ${dec(fp.slAtr)}×ATR, RR ${dec(fp.rr)}, jeda ${fp.cooldown} bar, maks ${fp.maxPos} posisi, spread maks ${fp.maxSpread} point, dan entri hanya di jam sesi (UTC). Timeframe M30 dan H1 ikut sebagai konfirmasi. Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Sinyal lebih jarang daripada scalping, tetapi tetap sensitif terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
+          ? `<p class="ea-hint">Preset Fast Signal Conservative: timeframe utama ${fp.primaryTf}, ambang sinyal ${dec(fp.threshold)} (lebih ketat dari scalping), SL ${dec(fp.slAtr)}×ATR, RR ${dec(fp.rr)}, jeda ${fp.cooldown} bar, maks ${fp.maxPos} posisi, spread maks ${fp.maxSpread} point. Timeframe M30 dan H1 ikut sebagai konfirmasi. Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Sinyal lebih jarang daripada scalping, tetapi tetap sensitif terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
           : S.mode === 'straddle'
           ? `<p class="ea-hint">Preset Stop Order Straddle: BUY STOP di atas dan SELL STOP di bawah harga, berjarak ${dec(S.stopOff)}×ATR, SL ${dec(S.slAtr)}×ATR, RR ${dec(S.rr)}, pending kedaluwarsa setelah ${S.expiry} bar, dan maks ${S.maxPos} siklus. Begitu satu sisi terisi, sisi lain dibatalkan. Mode ini belum punya backtest di aplikasi, jadi uji di MT5 Strategy Tester dan akun demo dulu.</p>`
           : `<p class="ea-hint">Mode swing memakai pengaturan NetCheck. Pengaturan scalping dan fast signal tersimpan terpisah dan tidak ikut berubah saat Anda kembali ke sini.</p>`}
@@ -209,15 +209,6 @@ export function eaPg(el) {
         ${f('Magic number', 'magic', { step: 1, min: 1 })}
       </div>
       ${f('Tutup posisi lawan saat sinyal berbalik', 'closeOpposite', { type: 'check' })}
-    </section>
-    <section class="ea-card">
-      <h3>Sesi perdagangan <small>jam UTC</small></h3>
-      ${f('Batasi entri baru ke jam tertentu', 'session.on', { type: 'check' })}
-      <div class="ea-grid2">
-        ${f('Mulai (jam UTC)', 'session.start', { step: 1, min: 0, max: 23 })}
-        ${f('Selesai (jam UTC)', 'session.end', { step: 1, min: 0, max: 23 })}
-      </div>
-      <p class="ea-hint">Contoh: 07–20 UTC kira-kira mencakup sesi London dan New York. Posisi yang sudah terbuka tetap dikelola di luar sesi; filter hanya memblokir entri baru.</p>
     </section>`;
 
   // ---------- tab Backtest ----------

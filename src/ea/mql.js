@@ -70,11 +70,6 @@ const cmCalc = (cm, i) => {
   return `   // Metode tambahan #${i + 1}: ${cm.name.replace(/\*\//g, '')} (${cm.type})\n   if(${N}_On)\n   {\n${body}\n   }\n`;
 };
 
-const sessInputs = s => {
-  const se = s.session || { on: false, start: 7, end: 20 };
-  return `input bool   InpSessOn    = ${b(se.on)};   // Batasi entri baru ke jam tertentu (UTC)\ninput int    InpSessStart = ${n(se.start)};   // Jam mulai (UTC, 0-23)\ninput int    InpSessEnd   = ${n(se.end)};   // Jam selesai (UTC, 0-23; boleh melewati tengah malam)`;
-};
-
 export function buildMql5(s, cfg) {
   const M = cfg.methods;
   const customs = (cfg.customMethods || []).filter(cm => CUSTOM_TYPES[cm.type]);
@@ -106,7 +101,6 @@ input ENUM_NC_DIR      InpDirection   = ${['NC_BOTH', 'NC_BUY_ONLY', 'NC_SELL_ON
 input long             InpMagic       = ${n(s.magic)};     // Magic number
 input string           InpComment     = "NETCHECK-EA";      // Komentar order
 input int              InpCandles     = ${n(cfg.market.candles)};              // Jumlah candle analisis per timeframe
-${sessInputs(s)}
 
 //--- Sinyal NetCheck
 input double InpThreshold   = ${n(s.threshold)};   // Skor minimum BUY/SELL (0-1)
@@ -445,17 +439,6 @@ bool Evaluate(double &score)
    return true;
 }
 
-//--- Sesi perdagangan (jam UTC)
-bool InSession()
-{
-   if(!InpSessOn) return true;
-   MqlDateTime dt;
-   TimeGMT(dt);
-   int h = dt.hour;
-   if(InpSessStart <= InpSessEnd) return (h >= InpSessStart && h < InpSessEnd);
-   return (h >= InpSessStart || h < InpSessEnd);
-}
-
 //--- Posisi
 int CountPos()
 {
@@ -679,7 +662,6 @@ void StraddleTick()
    if(bt == 0 || bt == g_lastBar) return;      // pasang pending sekali per bar baru
    g_lastBar = bt;
    g_atr = StraddleAtr();                      // ATR untuk trailing ATR (dihitung sekali per bar)
-   if(!InSession()) { CancelPending(); return; }
    if(nPos >= InpMaxPos) { CancelPending(); return; }
    if(InpFollow) CancelPending();              // ikut candle: pending lama dibatalkan, dipasang ulang di harga baru
    else if(CountPending() > 0) return;         // tanpa ikut: pending dibiarkan sampai kedaluwarsa
@@ -736,7 +718,6 @@ void OnTick()
    if(InpDirection == NC_SELL_ONLY && sig > 0) return;
 
    if(InpCloseOpp) CloseDir(-sig);
-   if(!InSession()) return;                   // di luar sesi: tidak ada entri baru
    if(CountPos() >= InpMaxPos) return;
    int secs = PeriodSeconds(InpPrimaryTf);
    if(g_lastEntry > 0 && secs > 0 && (bt - g_lastEntry) / secs < InpCooldown) return;
