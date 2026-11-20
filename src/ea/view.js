@@ -161,6 +161,7 @@ export function eaPg(el) {
         ${f('Jarak pending (×ATR)', 'stopOff', { step: 0.1, min: 0 })}
         ${f('Kedaluwarsa (bar)', 'expiry', { step: 1, min: 1 })}
         ${f('Pending ikut pergerakan candle', 'follow', { type: 'check' })}
+        ${f('Pasang pending walau posisi masih terbuka', 'addWhile', { type: 'check' })}
       </div>
     </section>` : ''}
     <section class="ea-card">

@@ -137,6 +137,7 @@ input bool   InpBeOn       = ${b((s.be || {}).on ?? true)};         // Break-eve
 input double InpBeStart    = ${n((s.be || {}).start ?? 1)};        // Break-even mulai saat profit >= nilai ini x risiko awal
 input int    InpBeBuffer   = ${n((s.be || {}).buffer ?? 2)};        // Buffer di atas/bawah harga entri (points)
 input bool   InpFollow     = ${b(s.follow ?? true)};         // Pending ikut candle: dibatalkan dan dipasang ulang di harga baru tiap bar
+input bool   InpAddWhile   = ${b(s.addWhile ?? false)};      // Pasang pending walau posisi masih terbuka (sampai InpMaxPos)
 
 //--- Parameter metode (default dari konfigurasi NetCheck)
 input bool   InpEMA_On = ${b(M.ema.enabled)};     input double InpEMA_W = ${n(M.ema.weight)};
@@ -621,21 +622,24 @@ void StraddleTick()
 {
    ManageBreakEven();
    ManageTrailing();
-   // OCO: begitu salah satu sisi terisi, sisi lain dibatalkan
-   if(CountPos() > 0)
+   // OCO: begitu salah satu sisi terisi, sisi lain dibatalkan (kecuali mode tambah posisi)
+   int nPos = CountPos();
+   if(nPos > 0 && !InpAddWhile)
    {
       CancelPending();
       g_lastEntry = iTime(g_sym, InpPrimaryTf, 0);
       return;
    }
+   if(nPos > 0) g_lastEntry = iTime(g_sym, InpPrimaryTf, 0);
    datetime bt = iTime(g_sym, InpPrimaryTf, 0);
    if(bt == 0 || bt == g_lastBar) return;      // pasang pending sekali per bar baru
    g_lastBar = bt;
    if(!InSession()) { CancelPending(); return; }
+   if(nPos >= InpMaxPos) { CancelPending(); return; }
    if(InpFollow) CancelPending();              // ikut candle: pending lama dibatalkan, dipasang ulang di harga baru
    else if(CountPending() > 0) return;         // tanpa ikut: pending dibiarkan sampai kedaluwarsa
    int secs = PeriodSeconds(InpPrimaryTf);
-   if(g_lastEntry > 0 && secs > 0 && (bt - g_lastEntry) / secs < InpCooldown) return;
+   if(nPos == 0 && g_lastEntry > 0 && secs > 0 && (bt - g_lastEntry) / secs < InpCooldown) return;
    if(InpMaxSpread > 0)
    {
       double sp = (SymbolInfoDouble(g_sym, SYMBOL_ASK) - SymbolInfoDouble(g_sym, SYMBOL_BID)) / SymbolInfoDouble(g_sym, SYMBOL_POINT);
