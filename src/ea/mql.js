@@ -88,7 +88,7 @@ export function buildMql5(s, cfg) {
   return `//+------------------------------------------------------------------+
 //| ${name}.mq5                                                       
 //| Dibuat oleh NETCHECK EA BUILDER — strategi = mesin analisis NetCheck
-//| Instrumen: ${s.symbol} · Mode: ${({ scalp: 'SCALPING', fast: 'FAST SIGNAL CONSERVATIVE', straddle: 'STOP ORDER STRADDLE' })[s.mode] || 'SWING'} · MetaTrader 5 (kompatibel Winlator)
+//| Instrumen: ${s.symbol} · Mode: ${({ scalp: 'SCALPING', fast: 'FAST SIGNAL CONSERVATIVE', straddle: 'STOP ORDER STRADDLE' })[s.mode] || 'SWING'}${s.useAnalysis === false && s.mode !== 'straddle' ? ' · TANPA ANALISA' : ''} · MetaTrader 5 (kompatibel Winlator)
 //| PERINGATAN: trading berisiko. Uji di akun demo / Strategy Tester dulu.
 //+------------------------------------------------------------------+
 #property copyright "NETCHECK"
@@ -130,7 +130,7 @@ input int    InpCooldown   = ${n(s.cooldown)};        // Jeda minimal antar entr
 input bool   InpCloseOpp   = ${b(s.closeOpposite)};   // Tutup posisi lawan saat sinyal berbalik
 input int    InpMaxSpread  = ${n(s.maxSpread)};      // Spread maksimum (points), 0 = tanpa batas
 input int    InpSlippage   = ${n(s.slippage)};       // Slippage (points)
-input bool   InpStraddle   = ${s.mode === 'straddle' ? 'true' : 'false'};   // Mode Stop Order Straddle (BUY STOP + SELL STOP)
+input bool   InpStraddle   = ${(s.mode === 'straddle' || s.useAnalysis === false) ? 'true' : 'false'};   // Mode Stop Order Straddle (BUY STOP + SELL STOP)
 input double InpStopOffAtr = ${n(s.stopOff ?? 0.5)};      // Jarak pending dari harga = ATR x nilai ini
 input int    InpExpiryBars = ${n(s.expiry ?? 5)};         // Pending kedaluwarsa setelah sekian bar
 

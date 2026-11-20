@@ -9,6 +9,8 @@ import { defaultsFromNetcheck, cfgFromCache, analysisCfg, fetchHistory, loadData
 // Label per mode untuk tampilan (kunci sama dengan S.mode).
 const MODE_NAME = { swing: 'Swing', scalp: 'Scalping', fast: 'Fast Signal Conservative', straddle: 'Stop Order Straddle' };
 const MODE_GRID = { swing: 'Swing', scalp: 'scalping', fast: 'fast signal conservative' };
+// Tanpa analisa = EA tidak menunggu sinyal NdaxTrade; ia memasang BUY STOP + SELL STOP (sama seperti straddle).
+const noAnalysis = S => S.mode === 'straddle' || S.useAnalysis === false;
 import { buildMql5, precheck, compileBat, fileBase } from './mql.js';
 import './ea.css';
 
@@ -100,7 +102,10 @@ export function eaPg(el) {
         <button type="button" data-mode="fast" class="${S.mode === 'fast' ? 'on' : ''}" aria-pressed="${S.mode === 'fast'}">Fast Signal Conservative<small>Sinyal cepat, ambang ketat, 1 posisi</small></button>
         <button type="button" data-mode="straddle" class="${S.mode === 'straddle' ? 'on' : ''}" aria-pressed="${S.mode === 'straddle'}">Stop Order Straddle<small>BUY STOP + SELL STOP, SL ATR</small></button>
       </div>
-      ${S.mode === 'scalp'
+      ${S.mode === 'straddle' ? '' : f('Pakai analisa NdaxTrade untuk entri', 'useAnalysis', { type: 'check' })}
+      ${S.useAnalysis === false && S.mode !== 'straddle'
+        ? `<p class="ea-hint">Analisa NdaxTrade mati: EA tidak menunggu sinyal. Setiap bar baru EA memasang BUY STOP dan SELL STOP di sekitar harga, dengan SL, RR, jarak pending, dan kedaluwarsa dari mode ${esc(MODE_NAME[S.mode] || 'Swing')}. Hasilnya tidak diuji di aplikasi; gunakan MT5 Strategy Tester.</p>`
+        : S.mode === 'scalp'
         ? `<p class="ea-hint">Preset scalping: timeframe utama ${sp.primaryTf}, SL ${dec(sp.slAtr)}×ATR, RR ${dec(sp.rr)}, jeda ${sp.cooldown} bar, maks ${sp.maxPos} posisi, spread maks ${sp.maxSpread} point, dan entri hanya di jam sesi (UTC). Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Hasil scalping sangat peka terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
         : S.mode === 'fast'
           ? `<p class="ea-hint">Preset Fast Signal Conservative: timeframe utama ${fp.primaryTf}, ambang sinyal ${dec(fp.threshold)} (lebih ketat dari scalping), SL ${dec(fp.slAtr)}×ATR, RR ${dec(fp.rr)}, jeda ${fp.cooldown} bar, maks ${fp.maxPos} posisi, spread maks ${fp.maxSpread} point, dan entri hanya di jam sesi (UTC). Timeframe M30 dan H1 ikut sebagai konfirmasi. Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Sinyal lebih jarang daripada scalping, tetapi tetap sensitif terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
@@ -149,7 +154,7 @@ export function eaPg(el) {
   };
 
   // ---------- tab Risiko ----------
-  const tabRisiko = () => `${S.mode === 'straddle' ? `
+  const tabRisiko = () => `${noAnalysis(S) ? `
     <section class="ea-card">
       <h3>Stop Order Straddle</h3>
       <div class="ea-grid2">
@@ -225,7 +230,7 @@ export function eaPg(el) {
       <div><small>Rata-rata kalah</small><b class="sell">${num(r.avgLoss)}</b></div>
     </div>`;
   const tabBacktest = () => {
-    if (S.mode === 'straddle') return `<section class="ea-card"><h3>Backtest tidak tersedia</h3><p class="ea-hint">Mode Stop Order Straddle belum punya simulator di aplikasi. Uji di MT5 Strategy Tester (model Every tick based on real ticks) dengan pengaturan dari halaman ini.</p></section>`;
+    if (noAnalysis(S)) return `<section class="ea-card"><h3>Backtest tidak tersedia</h3><p class="ea-hint">Mode tanpa analisa (Stop Order Straddle) belum punya simulator di aplikasi. Uji di MT5 Strategy Tester (model Every tick based on real ticks) dengan pengaturan dari halaman ini.</p></section>`;
     const tfs = btTfs(S), skipped = TF_ORDER.filter(k => S.tfs[k].on && !tfs.includes(k));
     const b = st.bt;
     const o = st.opt;
@@ -362,7 +367,7 @@ export function eaPg(el) {
       if (!r) throw new Error('Data belum cukup untuk dianalisis');
       st.live = r;
     });
-    if ((a === 'bt' || a === 'opt') && S.mode === 'straddle') { st.err = 'Backtest dan optimasi belum tersedia untuk Stop Order Straddle. Uji di MT5 Strategy Tester.'; return render(); }
+    if ((a === 'bt' || a === 'opt') && noAnalysis(S)) { st.err = 'Backtest dan optimasi belum tersedia untuk mode tanpa analisa. Uji di MT5 Strategy Tester.'; return render(); }
     if (a === 'bt') return run('bt', async () => {
       const series = await ensureSeries();
       st.bt = simulate(series, S);

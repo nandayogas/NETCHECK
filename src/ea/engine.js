@@ -94,6 +94,7 @@ export const MODES = ['swing', 'scalp', 'fast', 'straddle'];
 // Pastikan semua set mode ada. Dipanggil saat memuat pengaturan.
 export function ensureModes(s) {
   if (!s.session) s.session = { on: false, start: 7, end: 20 };
+  if (s.useAnalysis == null) s.useAnalysis = true;   // false = tanpa analisa NdaxTrade (pasang BUY STOP + SELL STOP)
   if (s.stopOff == null) s.stopOff = 0.5;
   if (s.expiry == null) s.expiry = 5;
   if (!s.modes) {
