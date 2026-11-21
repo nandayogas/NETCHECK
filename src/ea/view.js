@@ -15,6 +15,7 @@ const noAnalysis = S => S.mode === 'straddle' || S.useAnalysis === false;
 // Mode berbasis pending tanpa analisa (Trailing Reverse dan Trailing Stop) memakai tab Risiko dan Backtest yang sama.
 const isRev = S => S.mode === 'trev' || S.mode === 'trailstop';
 import { buildMql5, precheck, compileBat, fileBase } from './mql.js';
+import { lintMql5, lintSummary } from './lint.js';
 import { simulateTrev, optimizeTrev, adviceTrev } from './trev.js';
 import './ea.css';
 
@@ -388,14 +389,16 @@ export function eaPg(el) {
   const tabKode = () => {
     const cfg = cfgFromCache();
     const src = buildMql5(S, analysisCfgForCode(cfg));
-    const issues = precheck(src);
+    const lint = lintSummary(lintMql5(src));
+    const issues = [...precheck(src), ...lint.errors];
     const base = fileBase(S);
     st.src = src;
     return `
     <section class="ea-card">
       <h3>Kode MQL5</h3>
       ${f('Nama EA / file', 'name', { type: 'text' })}
-      <div class="ea-check ${issues.length ? 'bad' : 'ok'}">${issues.length ? '✖ ' + issues.map(esc).join(' · ') : `✔ Pemeriksaan awal lolos · ${src.split('\n').length} baris`}</div>
+      <div class="ea-check ${issues.length ? 'bad' : 'ok'}">${issues.length ? '✖ ' + issues.map(esc).join(' · ') : `✔ Pemeriksaan lolos · ${src.split('\n').length} baris`}</div>
+      ${lint.warnings.length ? `<p class="ea-hint">Peringatan: ${lint.warnings.map(esc).join(' · ')}</p>` : ''}
       <pre class="ea-code" tabindex="0">${esc(src.split('\n').slice(0, 70).join('\n'))}\n… (${src.split('\n').length - 70} baris lagi)</pre>
       <div class="ea-row">
         <button class="ea-btn" data-act="dl-mq5">Unduh ${esc(base)}.mq5</button>
@@ -521,7 +524,8 @@ export function eaPg(el) {
     if (a === 'dl-bat') return saveFile('compile_' + fileBase(S) + '.bat', crlf(compileBat(fileBase(S))), 'text/plain').catch(x => { st.err = x.message; render(); });
     if (a === 'copy') { try { await navigator.clipboard.writeText(st.src); t.textContent = 'Tersalin ✔'; } catch { t.textContent = 'Gagal menyalin'; } return; }
     if (a === 'compile') return run('compile', async () => {
-      if (precheck(st.src).length) throw new Error('Perbaiki kode dulu: pemeriksaan awal gagal');
+      const bad = [...precheck(st.src), ...lintSummary(lintMql5(st.src)).errors];
+      if (bad.length) throw new Error('Perbaiki kode dulu: ' + bad[0]);
       const r = await remoteCompile(S.compileUrl.trim(), fileBase(S), crlf(st.src));
       st.ex5 = r.bytes; st.compileLog = r.log;
     });

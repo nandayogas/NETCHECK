@@ -95,3 +95,19 @@ Versi tanpa balik arah dari Trailing Reverse: satu posisi, tanpa pending berlawa
 - **Magic number:** sama dengan Trailing Reverse. Jangan jalankan keduanya di satu akun dan simbol yang sama bersamaan, atau ubah magic number salah satunya.
 - **Kode:** generator MQL5 dan simulator memakai `buildTrailRev()` dan `simulateTrev()` yang sama dengan Trailing Reverse. Komentar order EA: `NETCHECK-TSTOP`.
 - **Backtest:** perkiraan kasar dari candle M1, sama seperti Trailing Reverse. Uji di MT5 Strategy Tester (Every tick based on real ticks) dan akun demo.
+
+## 13. Tes kode MQL5 (lint)
+Tab **Kode & EX5** kini menjalankan pemeriksaan statis (`src/ea/lint.js`) sebelum file dikirim ke MetaEditor atau layanan compile. Ini bukan pengganti compile, tetapi menangkap kesalahan umum:
+- variabel `Inp*`, `g_*`, atau objek `trade` dipakai tapi tidak dideklarasikan (error)
+- fungsi yang didefinisikan dua kali (error)
+- baris `input` tanpa titik koma, string yang tidak ditutup, kurung tidak seimbang (error)
+- `OnInit` atau `OnTick` hilang, `CTrade` tanpa `#include <Trade/Trade.mqh>` (error)
+- `OnDeinit` tidak ada (peringatan saja)
+
+Tombol "Compile sekarang" tidak mengirim kode yang masih punya error.
+
+Jalankan tes dari folder proyek:
+```bash
+npm test
+```
+Tes memastikan kode dari semua mode lolos, dan kesalahan yang disengaja (variabel hilang, fungsi ganda, dll.) tertangkap.
