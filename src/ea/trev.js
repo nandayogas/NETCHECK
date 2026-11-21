@@ -12,6 +12,12 @@ export const REV_DEFAULTS = {
   pipPoints: 10,          // 1 pip = 10 points (XAUUSD 2 digit: 1 pip = 0,10 USD)
   distPips: 3,            // jarak pending dari harga
   stepPips: 1,            // pending / SL baru digeser bila selisih >= ini (hemat request ke server)
+  atrOn: true,            // jarak pending otomatis mengikuti ATR (distPips dipakai bila mati)
+  atrPeriod: 14,          // periode ATR (M1)
+  atrMult: 0.5,           // jarak pending = atrMult x ATR
+  distMinPips: 3,         // batas bawah jarak pending (mode ATR)
+  distMaxPips: 15,        // batas atas jarak pending (mode ATR)
+  spreadMult: 3,          // jarak pending minimal = spreadMult x spread saat ini (mode ATR)
   slPips: 15,             // SL awal posisi
   trailOn: true,          // SL ikut harga
   trailStartPips: 10,     // SL mulai ikut saat profit >= ini
@@ -59,6 +65,13 @@ input int    InpPipPoints   = ${n(r.pipPoints)};  // 1 pip = berapa points (${in
 //--- Pending (BUY STOP / SELL STOP)
 input double InpDistPips    = ${n(r.distPips)};   // Jarak pending dari harga (pips)
 input double InpStepPips    = ${n(r.stepPips)};   // Geser pending/SL hanya bila selisih >= ini (pips)
+input bool   InpAtrOn        = ${b(r.atrOn)};     // Jarak pending otomatis mengikuti ATR (false = pakai InpDistPips tetap)
+input ENUM_TIMEFRAMES InpAtrTf = PERIOD_M1;       // Timeframe ATR (backtest aplikasi memakai M1)
+input int    InpAtrPeriod    = ${n(r.atrPeriod)};  // Periode ATR
+input double InpAtrMult      = ${n(r.atrMult)};    // Jarak pending = pengali x ATR
+input double InpDistMinPips  = ${n(r.distMinPips)};  // Jarak pending minimum (pips, mode ATR)
+input double InpDistMaxPips  = ${n(r.distMaxPips)};  // Jarak pending maksimum (pips, mode ATR)
+input double InpSpreadMult   = ${n(r.spreadMult)};   // Jarak minimal = pengali x spread saat ini (mode ATR)
 input bool   InpReverse     = ${b(r.reverse)};    // Pending kena = balik arah (false = hanya keluar lewat SL, lalu pasang ulang)
 
 //--- Stop loss
@@ -83,6 +96,11 @@ int      g_flips = 0;
 long     g_hourKey = -1, g_dayKey = -1;
 double   g_dayBal = 0;
 bool     g_halt = false;
+string   g_lastWhy = "", g_err = "";
+int      g_atrH = INVALID_HANDLE;
+double   g_atrVal = 0;
+datetime g_atrBar = 0;
+datetime g_lastWhyTime = 0, g_lastCmt = 0;
 
 double Pips(const double p) { return p * g_pip; }
 double Nrm(const double price) { return NormalizeDouble(price, g_digits); }
@@ -107,6 +125,74 @@ double MinDist()
    return (MathMax(lv, fr) + 1.0) * g_pt;
 }
 
+// ATR candle yang sudah tutup (diperbarui sekali per bar).
+double AtrNow()
+{
+   if(g_atrH == INVALID_HANDLE) return 0;
+   datetime bt = iTime(g_sym, InpAtrTf, 0);
+   if(bt != g_atrBar)
+   {
+      double b[1];
+      if(CopyBuffer(g_atrH, 0, 1, 1, b) == 1 && b[0] > 0) { g_atrVal = b[0]; g_atrBar = bt; }
+   }
+   return g_atrVal;
+}
+
+// Jarak pending dari harga. Mode ATR: pengali x ATR, dijepit antara minimum dan maksimum, lalu minimal pengali x spread.
+// Selalu minimal jarak yang diizinkan broker (stops level).
+double CurDist()
+{
+   double d = Pips(InpDistPips);
+   if(InpAtrOn)
+   {
+      double a = AtrNow();
+      if(a > 0)
+      {
+         double lo = MathMin(Pips(InpDistMinPips), Pips(InpDistMaxPips));
+         double hi = MathMax(Pips(InpDistMinPips), Pips(InpDistMaxPips));
+         d = MathMax(lo, MathMin(hi, InpAtrMult * a));
+         d = MathMax(d, InpSpreadMult * (double)SymbolInfoInteger(g_sym, SYMBOL_SPREAD) * g_pt);
+      }
+   }
+   return MathMax(d, MinDist());
+}
+
+// SL awal minimal 2x jarak pending, dan SL ikut harga tidak lebih rapat dari jarak pending
+// (kalau lebih rapat, SL kena lebih dulu dan balik arah tidak terjadi).
+double SlDist(const double d)    { return MathMax(Pips(InpSlPips), 2.0 * d); }
+double TrailDist(const double d) { return MathMax(Pips(InpTrailDistPips), d); }
+
+// Tulis alasan ke tab Experts (pesan yang sama maksimal tiap 30 detik, supaya log tidak banjir).
+void Why(const string m)
+{
+   if(m == g_lastWhy && TimeCurrent() - g_lastWhyTime < 30) return;
+   g_lastWhy = m; g_lastWhyTime = TimeCurrent();
+   Print(m);
+}
+
+// Status singkat di pojok chart (maksimal 1x per detik).
+void ShowStatus(const string state)
+{
+   datetime now = TimeCurrent();
+   if(now == g_lastCmt) return;
+   g_lastCmt = now;
+   Comment("NETCHECK Trailing Reverse | ", g_sym, "\\n",
+           "Status: ", state, "\\n",
+           "Spread: ", (string)SymbolInfoInteger(g_sym, SYMBOL_SPREAD), " points (maks ", (string)InpMaxSpread, ")\\n",
+           "Jarak pending: ", DoubleToString(CurDist(), g_digits), InpAtrOn ? " (ATR " + DoubleToString(g_atrVal, g_digits) + ")" : " (tetap)", " | 1 pip = ", DoubleToString(g_pip, g_digits), "\\n",
+           "Balik arah jam ini: ", (string)g_flips, " dari maks ", (string)InpMaxFlipsHour, "\\n",
+           "Error terakhir: ", g_err);
+}
+
+// Cek hasil perintah ke server; bila gagal, simpan dan tulis alasannya.
+bool Ok(const bool r, const string what)
+{
+   if(r) return true;
+   g_err = what + ": " + trade.ResultRetcodeDescription() + " (" + IntegerToString((int)trade.ResultRetcode()) + ")";
+   Why("Order gagal -> " + g_err);
+   return false;
+}
+
 int OnInit()
 {
    g_sym = (InpSymbol == "") ? _Symbol : InpSymbol;
@@ -115,11 +201,20 @@ int OnInit()
    g_digits = (int)SymbolInfoInteger(g_sym, SYMBOL_DIGITS);
    g_pip = InpPipPoints * g_pt;
    g_hedge = ((ENUM_ACCOUNT_MARGIN_MODE)AccountInfoInteger(ACCOUNT_MARGIN_MODE) == ACCOUNT_MARGIN_MODE_RETAIL_HEDGING);
+   if(InpAtrOn)
+   {
+      g_atrH = iATR(g_sym, InpAtrTf, InpAtrPeriod);
+      if(g_atrH == INVALID_HANDLE) Print("Gagal membuat indikator ATR, jarak pending memakai InpDistPips tetap.");
+   }
    trade.SetExpertMagicNumber(InpMagic);
    trade.SetDeviationInPoints(InpSlippage);
    trade.SetTypeFillingBySymbol(g_sym);
    if(InpPipPoints <= 0 || InpLot <= 0) { Print("InpPipPoints dan InpLot harus > 0"); return INIT_PARAMETERS_INCORRECT; }
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) Print("Peringatan: Algo Trading belum aktif di terminal.");
+   long sp0 = SymbolInfoInteger(g_sym, SYMBOL_SPREAD);
+   Print("Spread sekarang ", sp0, " points (batas InpMaxSpread ", InpMaxSpread, "), jarak pending ", DoubleToString(Pips(InpDistPips), g_digits),
+         ", stops level ", SymbolInfoInteger(g_sym, SYMBOL_TRADE_STOPS_LEVEL), " points, lot min ", DoubleToString(SymbolInfoDouble(g_sym, SYMBOL_VOLUME_MIN), 4));
+   if(InpMaxSpread > 0 && sp0 > InpMaxSpread) Print("PERINGATAN: spread sekarang lebih besar dari InpMaxSpread, EA tidak akan memasang order. Naikkan InpMaxSpread.");
    Print("Trailing Reverse aktif di ", g_sym, " · 1 pip = ", DoubleToString(g_pip, g_digits), " · akun ", g_hedge ? "hedging" : "netting");
    return INIT_SUCCEEDED;
 }
@@ -195,6 +290,8 @@ void DeleteAllPending()
 
 void OnDeinit(const int reason)
 {
+   Comment("");
+   if(g_atrH != INVALID_HANDLE) IndicatorRelease(g_atrH);
    if(reason == REASON_REMOVE) DeleteAllPending();
 }
 
@@ -204,20 +301,27 @@ void KeepPending(const bool isBuy, const double vol)
 {
    double bid = SymbolInfoDouble(g_sym, SYMBOL_BID), ask = SymbolInfoDouble(g_sym, SYMBOL_ASK);
    if(bid <= 0 || ask <= 0) return;
-   double d = MathMax(Pips(InpDistPips), MinDist());
+   double d = CurDist();
    double step = Pips(InpStepPips);
    double cur = 0;
    ulong t = FindPending(isBuy ? ORDER_TYPE_BUY_STOP : ORDER_TYPE_SELL_STOP, cur);
    double want = Nrm(isBuy ? ask + d : bid - d);
-   double sl = Nrm(isBuy ? want - Pips(InpSlPips) : want + Pips(InpSlPips));
+   double sl = Nrm(isBuy ? want - SlDist(d) : want + SlDist(d));
    if(t == 0)
    {
-      if(isBuy) trade.BuyStop(vol, want, g_sym, sl, 0.0, ORDER_TIME_GTC, 0, InpComment);
-      else      trade.SellStop(vol, want, g_sym, sl, 0.0, ORDER_TIME_GTC, 0, InpComment);
+      bool r = isBuy ? trade.BuyStop(vol, want, g_sym, sl, 0.0, ORDER_TIME_GTC, 0, InpComment)
+                     : trade.SellStop(vol, want, g_sym, sl, 0.0, ORDER_TIME_GTC, 0, InpComment);
+      if(!r && trade.ResultRetcode() == TRADE_RETCODE_INVALID_FILL)
+      {
+         trade.SetTypeFilling(ORDER_FILLING_RETURN);   // broker menolak mode isi bawaan: coba RETURN
+         r = isBuy ? trade.BuyStop(vol, want, g_sym, sl, 0.0, ORDER_TIME_GTC, 0, InpComment)
+                   : trade.SellStop(vol, want, g_sym, sl, 0.0, ORDER_TIME_GTC, 0, InpComment);
+      }
+      Ok(r, isBuy ? "BUY STOP" : "SELL STOP");
       return;
    }
    bool closer = isBuy ? (want <= cur - step) : (want >= cur + step);
-   if(closer) trade.OrderModify(t, want, sl, 0.0, ORDER_TIME_GTC, 0);
+   if(closer) Ok(trade.OrderModify(t, want, sl, 0.0, ORDER_TIME_GTC, 0), "Geser pending");
 }
 
 // SL awal (bila belum ada) dan SL ikut harga setelah profit >= InpTrailStartPips. SL hanya bergerak searah profit.
@@ -225,24 +329,25 @@ void ManagePosition(const int dir, const ulong tkt, const double open, const dou
 {
    double bid = SymbolInfoDouble(g_sym, SYMBOL_BID), ask = SymbolInfoDouble(g_sym, SYMBOL_ASK);
    if(bid <= 0 || ask <= 0) return;
+   double d = CurDist();
    double step = Pips(InpStepPips), md = MinDist();
    if(dir > 0)
    {
-      double cand = (sl > 0) ? sl : open - Pips(InpSlPips);
+      double cand = (sl > 0) ? sl : open - SlDist(d);
       if(InpTrailOn && bid - open >= Pips(InpTrailStartPips))
-         cand = MathMax(cand, MathMax(open + Pips(InpTrailBufPips), bid - Pips(InpTrailDistPips)));
+         cand = MathMax(cand, MathMax(open + Pips(InpTrailBufPips), bid - TrailDist(d)));
       cand = Nrm(cand);
       bool need = (sl <= 0) || (cand >= sl + step);
-      if(need && cand <= bid - md) trade.PositionModify(tkt, cand, 0.0);
+      if(need && cand <= bid - md) Ok(trade.PositionModify(tkt, cand, 0.0), "Geser SL");
    }
    else
    {
-      double cand = (sl > 0) ? sl : open + Pips(InpSlPips);
+      double cand = (sl > 0) ? sl : open + SlDist(d);
       if(InpTrailOn && open - ask >= Pips(InpTrailStartPips))
-         cand = MathMin(cand, MathMin(open - Pips(InpTrailBufPips), ask + Pips(InpTrailDistPips)));
+         cand = MathMin(cand, MathMin(open - Pips(InpTrailBufPips), ask + TrailDist(d)));
       cand = Nrm(cand);
       bool need = (sl <= 0) || (cand <= sl - step);
-      if(need && cand >= ask + md) trade.PositionModify(tkt, cand, 0.0);
+      if(need && cand >= ask + md) Ok(trade.PositionModify(tkt, cand, 0.0), "Geser SL");
    }
 }
 
@@ -252,7 +357,20 @@ void OnTick()
    long dk = (long)(now / 86400), hk = (long)(now / 3600);
    if(dk != g_dayKey) { g_dayKey = dk; g_dayBal = AccountInfoDouble(ACCOUNT_BALANCE); g_halt = false; }
    if(hk != g_hourKey) { g_hourKey = hk; g_flips = 0; }
-   if(g_halt) return;
+   if(g_halt) { ShowStatus("BERHENTI: batas rugi harian tercapai"); return; }
+
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))
+   {
+      Why("Algo Trading belum aktif: nyalakan tombol Algo Trading di toolbar MT5 dan centang Allow Algo Trading di jendela EA (tab Common).");
+      ShowStatus("MENUNGGU: Algo Trading belum aktif");
+      return;
+   }
+   if((ENUM_SYMBOL_TRADE_MODE)SymbolInfoInteger(g_sym, SYMBOL_TRADE_MODE) != SYMBOL_TRADE_MODE_FULL)
+   {
+      Why("Simbol " + g_sym + " belum bisa ditrading (pasar tutup atau trading dibatasi oleh broker).");
+      ShowStatus("MENUNGGU: simbol belum bisa ditrading");
+      return;
+   }
 
    if(InpDailyLossPct > 0 && AccountInfoDouble(ACCOUNT_EQUITY) <= g_dayBal * (1.0 - InpDailyLossPct / 100.0))
    {
@@ -270,6 +388,7 @@ void OnTick()
    long spr = SymbolInfoInteger(g_sym, SYMBOL_SPREAD);
    bool spreadOk = (InpMaxSpread <= 0 || spr <= InpMaxSpread);
    bool limitHit = (InpMaxFlipsHour > 0 && g_flips >= InpMaxFlipsHour);
+   string spreadMsg = "Spread " + IntegerToString((int)spr) + " points lebih besar dari InpMaxSpread " + IntegerToString(InpMaxSpread) + ": EA tidak memasang order. Naikkan InpMaxSpread bila spread ini normal di broker Anda.";
 
    if(havePos)
    {
@@ -279,15 +398,22 @@ void OnTick()
       if(InpReverse && !limitHit && spreadOk)
          KeepPending(dir < 0, NormVol((g_hedge ? 1.0 : 2.0) * InpLot));      // pending berlawanan = balik arah
       else
+      {
          DeleteAllPending();
+         if(!spreadOk) Why(spreadMsg);
+         if(limitHit) Why("Batas balik arah per jam tercapai (" + IntegerToString(g_flips) + "). Pending balik arah dihentikan sampai jam berikutnya.");
+      }
+      ShowStatus(dir > 0 ? "POSISI BUY" : "POSISI SELL");
    }
    else
    {
       g_lastDir = 0;
-      if(!spreadOk || limitHit) { DeleteAllPending(); return; }
+      if(!spreadOk) { Why(spreadMsg); DeleteAllPending(); ShowStatus("MENUNGGU: spread terlalu lebar"); return; }
+      if(limitHit) { Why("Batas balik arah per jam tercapai. EA menunggu jam berikutnya."); DeleteAllPending(); ShowStatus("MENUNGGU: batas balik arah per jam"); return; }
       double v = NormVol(InpLot);
       KeepPending(true, v);
       KeepPending(false, v);
+      ShowStatus("MENUNGGU: BUY STOP + SELL STOP terpasang");
    }
 }
 //+------------------------------------------------------------------+
@@ -332,8 +458,18 @@ export function simulateTrev(bars, s) {
   const pip = r.pipPoints * instOf(s).pointUsd;   // 1 pip dalam USD
   const CONTRACT = s.contract > 0 ? s.contract : 100;   // unit per 1 lot
   const sp = s.bt.spread, lots = s.lot;
-  const dist = r.distPips * pip, step = r.stepPips * pip, slD = r.slPips * pip;
-  const tStart = r.trailStartPips * pip, tDist = r.trailDistPips * pip, tBuf = r.trailBufPips * pip;
+  const dist0 = r.distPips * pip, step = r.stepPips * pip, slD0 = r.slPips * pip;
+  const tStart = r.trailStartPips * pip, tDist0 = r.trailDistPips * pip, tBuf = r.trailBufPips * pip;
+  const dMin = Math.min(r.distMinPips, r.distMaxPips) * pip, dMax = Math.max(r.distMinPips, r.distMaxPips) * pip;
+  let dist = dist0, slD = slD0, tDist = tDist0, distSum = 0;
+  // ATR M1 (rata-rata sederhana True Range, seperti iATR MT5). Bar ke-i memakai ATR bar i-1 yang sudah tutup.
+  const P = Math.max(1, Math.floor(r.atrPeriod));
+  const atr = new Array(bars.length).fill(0);
+  {
+    const tr = bars.map((k, i) => i ? Math.max(k.h - k.l, Math.abs(k.h - bars[i - 1].c), Math.abs(k.l - bars[i - 1].c)) : k.h - k.l);
+    let sum = 0;
+    for (let i = 0; i < tr.length; i++) { sum += tr[i]; if (i >= P) sum -= tr[i - P]; atr[i] = i >= P - 1 ? sum / P : 0; }
+  }
   const PX = 0.02;                         // resolusi jalur harga (USD)
   let bal = s.bt.balance, peak = bal, maxDD = 0;
   let pos = null, buy = null, sell = null, flips = 0, hourKey = -1, dayKey = -1, dayBal = bal, halt = false;
@@ -404,6 +540,12 @@ export function simulateTrev(bars, s) {
 
   for (let bi = 0; bi < bars.length; bi++) {
     const k = bars[bi];
+    let d = dist0;
+    if (r.atrOn && bi >= 1 && atr[bi - 1] > 0) {
+      d = Math.max(dMin, Math.min(dMax, r.atrMult * atr[bi - 1]));
+      d = Math.max(d, r.spreadMult * sp);
+    }
+    dist = d; slD = Math.max(slD0, 2 * d); tDist = Math.max(tDist0, d); distSum += d;
     for (const px of microPath(k, bi * 2654435761 + 12345)) tick(px, k.t);
     lastT = k.t;
     const ask = k.c + sp;
@@ -424,6 +566,6 @@ export function simulateTrev(bars, s) {
     pf: gl > 0 ? gp / gl : (gp > 0 ? Infinity : 0), maxDD,
     avgWin: wins.length ? gp / wins.length : 0, avgLoss: losses.length ? -gl / losses.length : 0,
     expectancy: trades.length ? (bal - s.bt.balance) / trades.length : 0,
-    flips: flipTotal, flipsPerHour: flipTotal / hours, halted: halt, endT: lastT,
+    flips: flipTotal, flipsPerHour: flipTotal / hours, avgDist: bars.length ? distSum / bars.length : dist0, halted: halt, endT: lastT,
   };
 }

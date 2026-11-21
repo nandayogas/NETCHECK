@@ -109,7 +109,7 @@ export function eaPg(el) {
       ${S.useAnalysis === false && S.mode !== 'straddle' && S.mode !== 'trev'
         ? `<p class="ea-hint">Analisa NdaxTrade mati: EA tidak menunggu sinyal. Setiap bar baru EA memasang BUY STOP dan SELL STOP di sekitar harga, dengan SL, RR, jarak pending, dan kedaluwarsa dari mode ${esc(MODE_NAME[S.mode] || 'Swing')}. Hasilnya tidak diuji di aplikasi; gunakan MT5 Strategy Tester.</p>`
         : S.mode === 'trev'
-        ? `<p class="ea-hint">Trailing Reverse (tanpa analisa): saat dinyalakan EA memasang BUY STOP di atas dan SELL STOP di bawah harga (jarak ${S.rev.distPips} pip). Yang kena duluan jadi posisi, lalu pending berlawanan menempel di belakang harga dan ikut bergerak. Pending kena = posisi balik arah. SL ikut harga setelah profit ${S.rev.trailStartPips} pip. Lot tetap. Logikanya per tick, jadi timeframe chart tidak berpengaruh. Backtest di aplikasi hanya perkiraan kasar dari candle M1; uji di MT5 Strategy Tester (Every tick based on real ticks) dan akun demo dulu.</p>`
+        ? `<p class="ea-hint">Trailing Reverse (tanpa analisa): saat dinyalakan EA memasang BUY STOP di atas dan SELL STOP di bawah harga (jarak ${S.rev.atrOn ? `otomatis mengikuti ATR M1, ${S.rev.distMinPips} sampai ${S.rev.distMaxPips} pip` : S.rev.distPips + ' pip'}). Yang kena duluan jadi posisi, lalu pending berlawanan menempel di belakang harga dan ikut bergerak. Pending kena = posisi balik arah. SL ikut harga setelah profit ${S.rev.trailStartPips} pip. Lot tetap. Logikanya per tick, jadi timeframe chart tidak berpengaruh. Backtest di aplikasi hanya perkiraan kasar dari candle M1; uji di MT5 Strategy Tester (Every tick based on real ticks) dan akun demo dulu.</p>`
         : S.mode === 'scalp'
         ? `<p class="ea-hint">Preset scalping: timeframe utama ${sp.primaryTf}, SL ${dec(sp.slAtr)}×ATR, RR ${dec(sp.rr)}, jeda ${sp.cooldown} bar, maks ${sp.maxPos} posisi, spread maks ${sp.maxSpread} point. Pengaturan ini bisa diubah lagi di bawah dan di tab Risiko. Hasil scalping sangat peka terhadap spread dan slippage, jadi uji di akun demo dulu.</p>`
         : S.mode === 'fast'
@@ -177,13 +177,25 @@ export function eaPg(el) {
     <section class="ea-card">
       <h3>Trailing Reverse <small>pending menempel harga</small></h3>
       <div class="ea-grid2">
-        ${f('Jarak pending dari harga (pip)', 'rev.distPips', { step: 0.5, min: 0.5 })}
+        ${f('Jarak pending tetap (pip, bila ATR mati)', 'rev.distPips', { step: 0.5, min: 0.5 })}
         ${f('Geser minimal (pip)', 'rev.stepPips', { step: 0.5, min: 0.1 })}
         ${f('1 pip = berapa points', 'rev.pipPoints', { step: 1, min: 1 })}
         ${f('Maks balik arah per jam', 'rev.maxFlipsHour', { step: 1, min: 0 })}
       </div>
       ${f('Pending kena = balik arah', 'rev.reverse', { type: 'check' })}
       <p class="ea-hint">${instOf(S).pipNote}, jadi ${S.rev.distPips} pip = ${num(S.rev.distPips * S.rev.pipPoints * instOf(S).pointUsd, 2)} USD. Bila broker memakai digit lain, ubah "1 pip = berapa points". Geser minimal menjaga EA tidak membanjiri server broker dengan modifikasi order; di bawah 1 pip broker bisa menolak (Too many requests). Maks balik arah per jam: 0 = tanpa batas.</p>
+    </section>
+    <section class="ea-card">
+      <h3>Jarak pending otomatis (ATR) <small>mengikuti volatilitas</small></h3>
+      ${f('Jarak pending mengikuti ATR M1', 'rev.atrOn', { type: 'check' })}
+      <div class="ea-grid2">
+        ${f('Pengali ATR', 'rev.atrMult', { step: 0.1, min: 0.1 })}
+        ${f('Periode ATR', 'rev.atrPeriod', { step: 1, min: 1 })}
+        ${f('Jarak minimum (pip)', 'rev.distMinPips', { step: 0.5, min: 0.5 })}
+        ${f('Jarak maksimum (pip)', 'rev.distMaxPips', { step: 0.5, min: 0.5 })}
+        ${f('Minimal x spread', 'rev.spreadMult', { step: 0.5, min: 0 })}
+      </div>
+      <p class="ea-hint">Jarak pending = pengali x ATR, dijepit antara minimum dan maksimum, lalu tidak kurang dari "minimal x spread". Market liar membuat jarak melebar (flip palsu berkurang), market tenang membuatnya rapat. Pending yang sudah terpasang hanya bergeser mendekati harga; jarak baru berlaku untuk pending berikutnya. SL awal dan SL ikut harga otomatis tidak dibuat lebih rapat dari jarak pending. Bila dimatikan, EA memakai jarak tetap di atas.</p>
     </section>
     <section class="ea-card">
       <h3>Stop loss ikut harga</h3>
@@ -303,7 +315,7 @@ export function eaPg(el) {
       <h3>Hasil backtest</h3>
       ${curveSvg(b.curve)}
       ${stats(b)}
-      <p class="ea-hint">Balik arah rata-rata ${num(b.flipsPerHour, 1)} per jam${b.halted ? ' · berhenti karena batas rugi harian' : ''}. Setiap balik arah menanggung spread; kalau profit rata-rata per trade kecil dibanding spread, hasil live bisa jauh lebih buruk dari ini.</p>
+      <p class="ea-hint">Jarak pending rata-rata ${num(b.avgDist, 2)} USD. Balik arah rata-rata ${num(b.flipsPerHour, 1)} per jam${b.halted ? ' · berhenti karena batas rugi harian' : ''}. Setiap balik arah menanggung spread; kalau profit rata-rata per trade kecil dibanding spread, hasil live bisa jauh lebih buruk dari ini.</p>
       <div class="ea-tl"><div class="ea-sect">10 trade terakhir</div>${b.trades.slice(-10).reverse().map(t => `<div class="ea-tr"><span class="${t.dir > 0 ? 'buy' : 'sell'}">${t.dir > 0 ? 'BUY' : 'SELL'}</span><span>${fmtP(t.entry)} → ${fmtP(t.exit)} · ${esc(t.why)}</span><b class="${t.pnl >= 0 ? 'buy' : 'sell'}">${t.pnl >= 0 ? '+' : ''}${num(t.pnl)}</b></div>`).join('') || '<p class="ea-hint">Tidak ada trade pada periode ini.</p>'}</div>
     </section>` : ''}`;
   };

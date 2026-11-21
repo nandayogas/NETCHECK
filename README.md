@@ -77,3 +77,6 @@ Di EA Builder > Strategi > Instrumen & platform ada pilihan **Emas (XAUUSD)** da
 - Jarak pending Trailing Reverse sebaiknya minimal 2 sampai 3 kali spread normal broker.
 - Mode swing, scalping, fast, dan straddle memakai ATR dan nilai tick broker, jadi otomatis ikut skala harga BTC.
 
+## 10. Jarak pending otomatis (ATR) di Trailing Reverse
+Jarak pending bisa mengikuti volatilitas: jarak = pengali x ATR (M1, periode 14), dijepit antara jarak minimum dan maksimum, lalu tidak kurang dari pengali x spread saat ini. Market liar membuat pending melebar sehingga flip palsu berkurang; market tenang membuatnya rapat. Pending yang sudah terpasang hanya bergeser mendekati harga, jarak baru berlaku untuk pending berikutnya. SL awal (minimal 2x jarak pending) dan SL ikut harga (minimal sama dengan jarak pending) menyesuaikan otomatis. Dimatikan lewat `Jarak pending mengikuti ATR M1` (EA kembali memakai jarak tetap).
+

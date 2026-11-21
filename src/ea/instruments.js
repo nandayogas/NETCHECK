@@ -8,7 +8,7 @@ export const INSTRUMENTS = {
     pointUsd: 0.01,                     // 1 point = 0,01 USD (2 digit)
     spread: 0.25, spreadScale: 1, slippage: 30,
     pipNote: 'XAUUSD 2 digit: 1 pip = 10 points = 0,10 USD',
-    rev: { pipPoints: 10, distPips: 3, stepPips: 1, slPips: 15, trailStartPips: 10, trailDistPips: 5, trailBufPips: 1 },
+    rev: { pipPoints: 10, distPips: 3, distMinPips: 3, distMaxPips: 15, stepPips: 1, slPips: 15, trailStartPips: 10, trailDistPips: 5, trailBufPips: 1 },
   },
   btc: {
     label: 'Bitcoin (BTCUSD)', symbol: 'BTCUSD', dataSym: 'BTCUSDT', name: 'NetCheckBTC',
@@ -16,7 +16,7 @@ export const INSTRUMENTS = {
     pointUsd: 0.01,                     // 2 digit; bila broker 1 digit atau 0 digit, ubah "1 pip = berapa points"
     spread: 15, spreadScale: 60, slippage: 500,
     pipNote: 'BTCUSD 2 digit: 1 pip = 100 points = 1 USD',
-    rev: { pipPoints: 100, distPips: 40, stepPips: 10, slPips: 150, trailStartPips: 100, trailDistPips: 50, trailBufPips: 10 },
+    rev: { pipPoints: 100, distPips: 40, distMinPips: 40, distMaxPips: 200, stepPips: 10, slPips: 150, trailStartPips: 100, trailDistPips: 50, trailBufPips: 10 },
   },
 };
 export const instOf = s => INSTRUMENTS[s && s.inst] || INSTRUMENTS.xau;
