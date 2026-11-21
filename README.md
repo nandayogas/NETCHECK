@@ -111,3 +111,14 @@ Jalankan tes dari folder proyek:
 npm test
 ```
 Tes memastikan kode dari semua mode lolos, dan kesalahan yang disengaja (variabel hilang, fungsi ganda, dll.) tertangkap.
+
+## 14. Saran AI Canggih (Beta)
+Di tab **Strategi** ada kartu Saran AI dengan tiga level (Conservative, Balanced, Aggressive). Tekan **Analisa Sekarang** untuk melihat rekomendasi lot/risiko, SL, TP, trailing, dan maks posisi. Tekan **Terapkan rekomendasi** untuk memakainya.
+
+Catatan penting:
+- "AI" di sini adalah analisis berbasis aturan (`src/ea/advisor.js`), bukan model yang memprediksi pasar. Tidak ada panggilan ke layanan AI eksternal.
+- Hasil di tab **Backtest** dianalisis dari simulasi pada data historis Binance. Setelah backtest, panel "Analisis AI hasil" memberi temuan dan langkah berikutnya. Panel itu tidak menambahkan estimasi win rate atau drawdown.
+- Filter berita diisi manual per baris dengan format `YYYY-MM-DD HH:mm - YYYY-MM-DD HH:mm` (WIB). Aplikasi tidak mengambil kalender berita online. Entri baru diblokir di dalam jendela; posisi yang sudah terbuka tetap dikelola.
+- Saran parameter penuh hanya untuk Swing, Scalping, dan Fast Signal. Trailing Reverse, Trailing Stop, dan Stop Order hanya menampilkan analisis strategi.
+
+Uji dengan `npm test`.

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test tests/mql-lint.test.mjs",
+    "test": "node --test tests/advisor.test.mjs tests/mql-lint.test.mjs",
     "build": "vite build",
     "build:admin": "vite build --mode admin",
     "deploy:admin": "vite build --mode admin && firebase deploy --only hosting",

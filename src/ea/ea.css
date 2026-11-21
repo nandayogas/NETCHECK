@@ -81,3 +81,32 @@
 .ea-modes button:last-child:nth-child(odd){grid-column:1/-1}
 .ea-okb,.ea-info{margin-top:10px;font-size:12px;border-radius:12px;padding:9px 11px}
 .ea-okb{background:rgba(0,229,160,.1);color:#5fe3b0} .ea-info{background:rgba(0,229,255,.07);color:var(--ea-txt)}
+
+/* ---------- Saran AI Canggih (cyan-ungu neon) ---------- */
+.ea .ai-card{border:1px solid transparent;background:linear-gradient(#0b1a33,#0b1a33) padding-box,linear-gradient(135deg,#00E5FF,#9B5CFF 60%,#6d3bff) border-box;box-shadow:0 0 22px rgba(155,92,255,.2),0 0 14px rgba(0,229,255,.12)}
+.ea .ai-card h3{color:#8ef0ff}
+.ea .ai-card h3 small{color:#b9a6ff}
+.ai-lvls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.ai-lv{background:rgba(7,16,36,.7);border:1px solid var(--ea-line);color:var(--ea-mut);border-radius:12px;padding:10px 6px;font:inherit;font-size:12.5px;font-weight:700;min-height:44px;cursor:pointer;transition:box-shadow .2s,color .2s}
+.ai-lv.on{color:#04121f;background:linear-gradient(90deg,#00E5FF,#9B5CFF);border-color:transparent;box-shadow:0 0 14px rgba(0,229,255,.35)}
+.ai-lv:focus-visible{outline:2px solid var(--ea-cy);outline-offset:2px}
+.ai-notes{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.ai-note{font-size:12.5px;line-height:1.5;padding:8px 10px;border-radius:10px;border-left:3px solid var(--ea-mut);background:rgba(7,16,36,.55);color:#c9d5e8}
+.ai-note.info{border-color:#00E5FF}
+.ai-note.warn{border-color:var(--ea-wait)}
+.ai-note.bad{border-color:var(--ea-sell)}
+.ai-note.good{border-color:var(--ea-buy)}
+.ai-sect{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ea-mut);margin:14px 0 6px}
+.ai-rec{border-top:1px solid var(--ea-line);margin-top:12px;padding-top:6px}
+.ai-row{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:7px 0;border-bottom:1px solid var(--ea-line)}
+.ai-row span{color:var(--ea-mut)}
+.ai-row b{text-align:right;font-variant-numeric:tabular-nums}
+.ai-verdict{border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:4px;margin-bottom:6px;background:rgba(7,16,36,.6);border:1px solid var(--ea-line)}
+.ai-verdict span{font-size:11.5px;color:var(--ea-mut)}
+.ai-verdict.candidate{border-color:var(--ea-buy)}
+.ai-verdict.candidate b{color:var(--ea-buy)}
+.ai-verdict.mixed b{color:var(--ea-wait)}
+.ai-verdict.weak b{color:var(--ea-sell)}
+.ai-news textarea{background:rgba(7,16,36,.7);border:1px solid var(--ea-edge);border-radius:12px;color:var(--ea-txt);font:inherit;font-size:13px;padding:10px;resize:vertical;min-height:72px;box-sizing:border-box;width:100%}
+.ai-news textarea:focus{border-color:var(--ea-cy);outline:0;box-shadow:0 0 12px rgba(0,229,255,.25)}
+@media (max-width:420px){.ai-lvls{grid-template-columns:1fr}.ai-lv{min-height:40px}.ai-row{font-size:12.5px}}

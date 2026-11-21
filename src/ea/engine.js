@@ -4,6 +4,7 @@ import { mergeConfig, TF_ORDER } from '../ndax/config.js';
 import { analyzeAll } from '../ndax/analyzer.js';
 import { REV_DEFAULTS } from './trev.js';
 import { INSTRUMENTS, instOf } from './instruments.js';
+import { inNewsWindow } from './advisor.js';
 
 export const TF_MS = { M1: 6e4, M5: 3e5, M15: 9e5, M30: 18e5, H1: 36e5, H4: 144e5, D1: 864e5 };
 const INTERVAL = { M1: '1m', M5: '5m', M15: '15m', M30: '30m', H1: '1h', H4: '4h', D1: '1d' };
@@ -311,7 +312,8 @@ export function simulate(series, s, from = 0, to = series.length) {
       const allowed = sig !== 0 && !(d === 1 && sig < 0) && !(d === 2 && sig > 0);
       if (allowed) {
         if (s.closeOpposite) for (let k = open.length - 1; k >= 0; k--) if (open[k].dir === -sig) { close(open[k], sig > 0 ? b.o + spread : b.o, b.t, 'Balik'); open.splice(k, 1); }
-        if (open.length < s.maxPos && i - lastEntry >= s.cooldown) {
+        // Filter berita hanya memblokir entri baru. Penutupan posisi (termasuk balik arah) tetap berjalan.
+        if (open.length < s.maxPos && i - lastEntry >= s.cooldown && !inNewsWindow(b.t, s.news)) {
           const risk = b.atr * s.slAtr;
           const entry = sig > 0 ? b.o + spread : b.o;
           let lots = s.lot;

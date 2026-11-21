@@ -16,6 +16,7 @@ const noAnalysis = S => S.mode === 'straddle' || S.useAnalysis === false;
 const isRev = S => S.mode === 'trev' || S.mode === 'trailstop';
 import { buildMql5, precheck, compileBat, fileBase } from './mql.js';
 import { lintMql5, lintSummary } from './lint.js';
+import { LEVELS, SUPPORTED, analyzeStrategy, recommend, analyzeResult, parseNewsWindows } from './advisor.js';
 import { simulateTrev, optimizeTrev, adviceTrev } from './trev.js';
 import './ea.css';
 
@@ -75,7 +76,7 @@ async function remoteCompile(url, base, source) {
 export function eaPg(el) {
   const id = ++session;
   const S = loadSettings();
-  const st = { tab: 'strategi', busy: '', msg: '', err: '', live: null, loaded: null, series: null, bt: null, opt: null, ex5: null, compileLog: '' };
+  const st = { tab: 'strategi', busy: '', msg: '', err: '', live: null, loaded: null, series: null, bt: null, opt: null, ex5: null, compileLog: '', aiLevel: 'balanced', aiRec: null };
   el.innerHTML = '<div class="ea" id="ea"></div>';
   const root = el.querySelector('#ea');
   const alive = () => id === session && root.isConnected;
@@ -86,6 +87,57 @@ export function eaPg(el) {
     if (o.opts) return `<label class="ea-f"><span>${label}</span><select data-p="${p}" ${o.n ? 'data-n="1"' : ''}>${o.opts.map(([val, t]) => `<option value="${esc(val)}" ${String(v) === String(val) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
     if (o.type === 'text') return `<label class="ea-f"><span>${label}</span><input type="text" data-p="${p}" value="${esc(v)}" ${o.ph ? `placeholder="${esc(o.ph)}"` : ''} autocomplete="off" autocapitalize="off" spellcheck="false"></label>`;
     return `<label class="ea-f"><span>${label}</span><input type="number" inputmode="decimal" data-p="${p}" value="${v}" step="${o.step ?? 'any'}" ${o.min != null ? `min="${o.min}"` : ''} ${o.max != null ? `max="${o.max}"` : ''}></label>`;
+  };
+
+  // ---------- Saran AI Canggih (analisis berbasis aturan, bukan prediksi) ----------
+  const aiRecCard = rec => {
+    const p = rec.params;
+    const rows = [
+      ['Lot / risiko', `${p.riskPct}% per trade · maks ${p.maxLot} lot`],
+      ['Stop Loss', `${p.slAtr} × ATR`],
+      ['Take Profit', `${Number((p.slAtr * p.rr).toFixed(2))} × ATR (RR ${p.rr})`],
+      ['Jarak trailing', `${p.trail.atrMult} × ATR`],
+      ['Mulai trailing', `profit ${p.trail.startRR} × risiko`],
+      ['Maks posisi', String(p.maxPos)],
+    ];
+    return `
+    <div class="ai-rec">
+      <div class="ai-sect">Rekomendasi ${esc(rec.label)}</div>
+      ${rows.map(([k, v]) => `<div class="ai-row"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}
+      <p class="ea-hint">${esc(rec.tfNote)} Ini titik awal, bukan hasil yang dijamin. Jalankan backtest sebelum dipakai.</p>
+      <button class="ea-btn ghost" data-act="ai-apply" ${SUPPORTED(S.mode) ? '' : 'disabled'}>Terapkan rekomendasi</button>
+    </div>`;
+  };
+  const aiStrategyCard = () => {
+    const sup = SUPPORTED(S.mode);
+    const lv = LEVELS[st.aiLevel] || LEVELS.balanced;
+    return `
+    <section class="ea-card ai-card">
+      <h3>Saran AI Canggih <small>Beta · analisis berbasis aturan dari data nyata</small></h3>
+      <div class="ai-lvls" role="group" aria-label="Level risiko">
+        ${Object.entries(LEVELS).map(([k, L]) => `<button type="button" class="ai-lv ai-lv-${k} ${st.aiLevel === k ? 'on' : ''}" data-act="ai-level" data-level="${k}" aria-pressed="${st.aiLevel === k}">${L.label}</button>`).join('')}
+      </div>
+      <p class="ea-hint">${esc(lv.desc)}</p>
+      <div class="ai-notes">${analyzeStrategy(S).map(n => `<div class="ai-note ${n.level}">${esc(n.text)}</div>`).join('')}</div>
+      <button class="ea-btn" data-act="ai-analyze" ${sup ? '' : 'disabled'}>Analisa Sekarang</button>
+      ${sup ? '' : '<p class="ea-hint">Saran parameter penuh tersedia untuk Swing, Scalping, dan Fast Signal. Mode ini hanya menampilkan analisis strategi.</p>'}
+      ${st.aiRec ? aiRecCard(st.aiRec) : ''}
+    </section>`;
+  };
+  const aiResultCard = b => {
+    if (!b) return '';   // kartu hanya muncul setelah backtest dijalankan
+    const a = analyzeResult(b, S);
+    const txt = { candidate: 'Kandidat untuk diuji lanjut', mixed: 'Untung, tapi belum memenuhi syarat kandidat', weak: 'Belum layak dipakai, perlu perbaikan', none: 'Tidak ada trade' }[a.verdict];
+    return `
+    <section class="ea-card ai-card">
+      <h3>Analisis AI hasil <small>dari backtest di atas · bukan prediksi</small></h3>
+      <div class="ai-verdict ${a.verdict}"><b>${esc(txt)}</b><span>Keyakinan sampel: ${esc(a.confidence)}</span></div>
+      <div class="ai-sect">Temuan</div>
+      ${a.findings.map(x => `<div class="ai-note ${x.level}">${esc(x.text)}</div>`).join('') || '<p class="ea-hint">Tidak ada temuan khusus.</p>'}
+      <div class="ai-sect">Langkah berikutnya</div>
+      <ol class="ea-steps">${a.next.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+      <p class="ea-hint">Angka pada kartu hasil di atas adalah hasil simulasi pada data historis. Analisis ini tidak menambahkan estimasi.</p>
+    </section>`;
   };
 
   // ---------- tab Strategi ----------
@@ -128,7 +180,7 @@ export function eaPg(el) {
         <label class="ea-sw"><span>${k}${S.primaryTf === k ? ' <em>UTAMA</em>' : ''}</span><input type="checkbox" data-p="tfs.${k}.on" ${S.tfs[k].on ? 'checked' : ''} ${S.primaryTf === k ? 'disabled' : ''}><i></i></label>
         <input type="number" inputmode="decimal" step="0.1" min="0" data-p="tfs.${k}.weight" value="${S.tfs[k].weight}" aria-label="Bobot ${k}"></div>`).join('');
     const lv = st.live;
-    if (isRev(S)) return `${modeCard}
+    if (isRev(S)) return `${aiStrategyCard()}${modeCard}
     <section class="ea-card">
       <h3>Instrumen & platform</h3>
       <div class="ea-grid2">
@@ -140,7 +192,7 @@ export function eaPg(el) {
       </div>
       <p class="ea-hint">Mode ini tidak memakai timeframe, bobot, atau metode NetCheck. Atur jarak pending dan SL di tab Risiko.</p>
     </section>`;
-    return `${modeCard}
+    return `${aiStrategyCard()}${modeCard}
     <section class="ea-card">
       <h3>Instrumen & platform</h3>
       <div class="ea-grid2">
@@ -361,7 +413,11 @@ export function eaPg(el) {
         ${f(`Spread (USD / ${instOf(S).unit})`, 'bt.spread', { step: 0.05, min: 0 })}
       </div>
       <p class="ea-hint">Memakai mesin NetCheck yang sama (${tfs.join(', ') || '—'}) pada data ${esc(S.dataSym)}.${skipped.length ? ` Timeframe ${skipped.join(', ')} lebih kecil dari timeframe utama, jadi tidak ikut backtest (tetap dipakai EA live).` : ''}</p>
-      <button class="ea-btn" data-act="bt" ${st.busy ? 'disabled' : ''}>${st.busy === 'bt' ? esc(st.msg || 'Memproses…') : 'Jalankan backtest'}</button>
+      <label class="ea-f ai-news"><span>Filter berita (WIB, satu jendela per baris)</span>
+        <textarea data-p="newsText" rows="3" placeholder="2026-12-05 19:30 - 2026-12-05 21:00" spellcheck="false">${esc(S.newsText || '')}</textarea></label>
+      ${parseNewsWindows(S.newsText).errors.length ? `<div class="ea-err">${esc(parseNewsWindows(S.newsText).errors[0])}</div>` : ''}
+      <p class="ea-hint">Isi manual jam rilis berita penting. Aplikasi tidak memakai kalender berita online. Entri baru diblokir di dalam jendela ini; posisi yang sudah terbuka tetap dikelola.</p>
+      <button class="ea-btn" data-act="bt" ${st.busy ? 'disabled' : ''}>${st.busy === 'bt' ? esc(st.msg || 'Memproses…') : 'Mulai backtest'}</button>
       ${st.err ? `<div class="ea-err">${esc(st.err)}</div>` : ''}
     </section>
     ${b ? `<section class="ea-card">
@@ -371,6 +427,7 @@ export function eaPg(el) {
       <div class="ea-tl"><div class="ea-sect">10 trade terakhir</div>${b.trades.slice(-10).reverse().map(t => `<div class="ea-tr"><span class="${t.dir > 0 ? 'buy' : 'sell'}">${t.dir > 0 ? 'BUY' : 'SELL'}</span><span>${fmtP(t.entry)} → ${fmtP(t.exit)}</span><b class="${t.pnl >= 0 ? 'buy' : 'sell'}">${t.pnl >= 0 ? '+' : ''}${num(t.pnl)}</b></div>`).join('') || '<p class="ea-hint">Tidak ada trade pada periode ini.</p>'}</div>
       <p class="ea-hint">Eksekusi di open bar berikutnya, SL didahulukan bila SL dan TP tersentuh dalam satu bar. Hasil MT5 Strategy Tester (data broker, tick) akan berbeda; anggap ini penyaring awal, bukan jaminan.</p>
     </section>
+    ${aiResultCard(b)}
     <section class="ea-card">
       <h3>AI Strategy Generator <small>mode ${MODE_GRID[S.mode] || MODE_GRID.swing}</small></h3>
       <p class="ea-hint">${S.mode === 'swing'
@@ -510,15 +567,38 @@ export function eaPg(el) {
       st.bt = simulateTrev(st.trevBars, S);
     });
     if ((a === 'bt' || a === 'opt') && noAnalysis(S)) { st.err = 'Backtest dan optimasi belum tersedia untuk mode tanpa analisa. Uji di MT5 Strategy Tester.'; return render(); }
+    if (a === 'ai-level') {
+      st.aiLevel = t.dataset.level;
+      if (st.aiRec) st.aiRec = recommend(S, st.aiLevel);
+      return render();
+    }
+    if (a === 'ai-analyze') {
+      st.aiRec = SUPPORTED(S.mode) ? recommend(S, st.aiLevel) : null;
+      return render();
+    }
+    if (a === 'ai-apply') {
+      const rec = st.aiRec;
+      if (!rec || !SUPPORTED(S.mode)) return;
+      const p = rec.params;
+      Object.assign(S, { lotMode: p.lotMode, riskPct: p.riskPct, maxLot: p.maxLot, slAtr: p.slAtr, rr: p.rr, maxPos: p.maxPos, trail: { ...S.trail, ...p.trail } });
+      persist(S);
+      st.bt = null; st.opt = null; st.err = '';   // hasil lama tidak lagi sesuai parameter
+      return render();
+    }
     if (a === 'bt') return run('bt', async () => {
+      const { windows, errors } = parseNewsWindows(S.newsText);
+      if (errors.length) throw new Error(errors[0]);
       const series = await ensureSeries();
-      st.bt = simulate(series, S);
+      st.bt = simulate(series, { ...S, news: windows });
     });
     if (a === 'opt') return run('opt', async () => {
+      const { windows, errors } = parseNewsWindows(S.newsText);
+      if (errors.length) throw new Error(errors[0]);
       const series = await ensureSeries();
-      st.bt = simulate(series, S);
+      const sim = { ...S, news: windows };
+      st.bt = simulate(series, sim);
       await new Promise(r => setTimeout(r, 30));
-      st.opt = optimize(series, S);
+      st.opt = optimize(series, sim);
     });
     if (a === 'dl-mq5') return saveFile(fileBase(S) + '.mq5', crlf(st.src), 'text/plain').catch(x => { st.err = x.message; render(); });
     if (a === 'dl-bat') return saveFile('compile_' + fileBase(S) + '.bat', crlf(compileBat(fileBase(S))), 'text/plain').catch(x => { st.err = x.message; render(); });
