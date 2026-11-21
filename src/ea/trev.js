@@ -6,6 +6,8 @@
 // Tidak memakai mesin analisis NetCheck dan tidak bergantung pada timeframe chart: logikanya jalan per tick.
 // Lot selalu tetap.
 
+import { instOf } from './instruments.js';
+
 export const REV_DEFAULTS = {
   pipPoints: 10,          // 1 pip = 10 points (XAUUSD 2 digit: 1 pip = 0,10 USD)
   distPips: 3,            // jarak pending dari harga
@@ -52,7 +54,7 @@ input int    InpSlippage    = ${n(s.slippage)};   // Slippage (points)
 input int    InpMaxSpread   = ${n(s.maxSpread)};  // Spread maksimum (points), 0 = tanpa batas
 
 //--- Satuan pip
-input int    InpPipPoints   = ${n(r.pipPoints)};  // 1 pip = berapa points (XAUUSD 2 digit: 10 = 0,10 USD)
+input int    InpPipPoints   = ${n(r.pipPoints)};  // 1 pip = berapa points (${instOf(s).pipNote}; sesuaikan dengan digit broker)
 
 //--- Pending (BUY STOP / SELL STOP)
 input double InpDistPips    = ${n(r.distPips)};   // Jarak pending dari harga (pips)
@@ -298,7 +300,6 @@ void OnTick()
 // jalur tick buatan: random walk (jembatan Brownian) dari Open ke Close yang dipetakan agar tepat menyentuh High dan Low.
 // Jalur dibangkitkan dari nomor bar, jadi hasil sama setiap dijalankan. Tetap perkiraan kasar, bukan data tick asli.
 // Harga candle dianggap harga BID; ASK = BID + spread. BUY masuk di ASK dan keluar di BID, SELL sebaliknya.
-const CONTRACT = 100;   // XAUUSD: 1 lot = 100 oz
 const TICKS = 120;      // jumlah tick buatan per candle M1
 
 function microPath(k, seed) {
@@ -328,7 +329,8 @@ function microPath(k, seed) {
 
 export function simulateTrev(bars, s) {
   const r = { ...REV_DEFAULTS, ...(s.rev || {}) };
-  const pip = r.pipPoints * 0.01;          // asumsi 1 point = 0,01 USD (XAUUSD 2 digit)
+  const pip = r.pipPoints * instOf(s).pointUsd;   // 1 pip dalam USD
+  const CONTRACT = s.contract > 0 ? s.contract : 100;   // unit per 1 lot
   const sp = s.bt.spread, lots = s.lot;
   const dist = r.distPips * pip, step = r.stepPips * pip, slD = r.slPips * pip;
   const tStart = r.trailStartPips * pip, tDist = r.trailDistPips * pip, tBuf = r.trailBufPips * pip;

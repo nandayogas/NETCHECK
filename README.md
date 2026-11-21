@@ -70,3 +70,10 @@ Meniru pola order stop-and-reverse: selalu 1 posisi + 1 pending stop berlawanan 
 - **Satuan pip:** XAUUSD 2 digit, 1 pip = 10 points = 0,10 USD (ubah `1 pip = berapa points` bila broker berbeda).
 - **Backtest di aplikasi:** candle M1 dipecah menjadi tick buatan (random walk yang menyentuh high dan low tiap candle). Ini perkiraan kasar, sangat peka terhadap spread, slippage, dan jeda eksekusi. Uji di MT5 Strategy Tester (Every tick based on real ticks) dan akun demo sebelum memakai uang asli.
 - Kode: `src/ea/trev.js` (default, generator MQL5, simulator).
+
+## 9. Instrumen: Emas atau Bitcoin
+Di EA Builder > Strategi > Instrumen & platform ada pilihan **Emas (XAUUSD)** dan **Bitcoin (BTCUSD)**. Satu pilihan itu mengatur simbol, data backtest Binance (BTCUSDT futures atau spot), ukuran kontrak, spread backtest, slippage, batas spread (points), dan nilai awal Trailing Reverse (1 pip = 1 USD untuk BTC).
+- Semua angka hanyalah titik awal dan bisa diubah. Ukuran kontrak, digit harga, dan spread berbeda antar broker, jadi cek spesifikasi BTCUSD di MT5 dan sesuaikan `Kontrak`, `1 pip = berapa points`, dan `Spread`.
+- Jarak pending Trailing Reverse sebaiknya minimal 2 sampai 3 kali spread normal broker.
+- Mode swing, scalping, fast, dan straddle memakai ATR dan nilai tick broker, jadi otomatis ikut skala harga BTC.
+

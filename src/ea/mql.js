@@ -97,7 +97,7 @@ enum ENUM_NC_DIR { NC_BOTH = 0, NC_BUY_ONLY = 1, NC_SELL_ONLY = 2 };
 enum ENUM_NC_LOT { NC_LOT_FIXED = 0, NC_LOT_RISK = 1 };
 
 //--- Umum
-input string           InpSymbol      = "";                 // Simbol (kosong = simbol chart, mis. XAUUSD / XAUUSDm)
+input string           InpSymbol      = "";                 // Simbol (kosong = simbol chart, mis. ${s.symbol} / ${s.symbol}m)
 input ENUM_TIMEFRAMES  InpPrimaryTf   = ${PERIOD[s.primaryTf]};   // Timeframe utama (acuan ATR & waktu eksekusi)
 input ENUM_NC_DIR      InpDirection   = ${['NC_BOTH', 'NC_BUY_ONLY', 'NC_SELL_ONLY'][s.direction]};          // Arah trading
 input long             InpMagic       = ${n(s.magic)};     // Magic number

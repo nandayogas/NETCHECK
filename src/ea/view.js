@@ -4,7 +4,8 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { TF_ORDER, CUSTOM_TYPES } from '../ndax/config.js';
 import { analyzeAll, LABELS, fmtP } from '../ndax/analyzer.js';
-import { defaultsFromNetcheck, cfgFromCache, analysisCfg, fetchHistory, loadData, precompute, simulate, optimize, btTfs, DATA_SYMBOLS, ensureModes, switchMode, scalpPreset, fastPreset, gridSize, GRIDS } from './engine.js';
+import { INSTRUMENTS, instOf } from './instruments.js';
+import { applyInstrument, defaultsFromNetcheck, cfgFromCache, analysisCfg, fetchHistory, loadData, precompute, simulate, optimize, btTfs, DATA_SYMBOLS, ensureModes, switchMode, scalpPreset, fastPreset, gridSize, GRIDS } from './engine.js';
 
 // Label per mode untuk tampilan (kunci sama dengan S.mode).
 const MODE_NAME = { swing: 'Swing', scalp: 'Scalping', fast: 'Fast Signal Conservative', straddle: 'Stop Order Straddle', trev: 'Trailing Reverse' };
@@ -126,8 +127,10 @@ export function eaPg(el) {
       <h3>Instrumen & platform</h3>
       <div class="ea-grid2">
         <div class="ea-f"><span>Platform</span><div class="ea-static">MetaTrader 5</div></div>
-        ${f('Simbol di broker', 'symbol', { type: 'text', ph: 'XAUUSD' })}
-        ${f('Data backtest', 'dataSym', { opts: DATA_SYMBOLS.map(d => [d.sym, d.label]) })}
+        ${f('Instrumen', 'inst', { opts: Object.entries(INSTRUMENTS).map(([k, i]) => [k, i.label]) })}
+        ${f('Simbol di broker', 'symbol', { type: 'text', ph: instOf(S).symbol })}
+        ${f(`Kontrak (${instOf(S).unit} per 1 lot)`, 'contract', { step: 'any', min: 0.0001 })}
+        ${f('Data backtest', 'dataSym', { opts: DATA_SYMBOLS.filter(d => d.inst === (S.inst || 'xau')).map(d => [d.sym, d.label]) })}
       </div>
       <p class="ea-hint">Mode ini tidak memakai timeframe, bobot, atau metode NetCheck. Atur jarak pending dan SL di tab Risiko.</p>
     </section>`;
@@ -136,12 +139,14 @@ export function eaPg(el) {
       <h3>Instrumen & platform</h3>
       <div class="ea-grid2">
         <div class="ea-f"><span>Platform</span><div class="ea-static">MetaTrader 5</div></div>
-        ${f('Simbol di broker', 'symbol', { type: 'text', ph: 'XAUUSD' })}
-        ${f('Data backtest', 'dataSym', { opts: DATA_SYMBOLS.map(d => [d.sym, d.label]) })}
+        ${f('Instrumen', 'inst', { opts: Object.entries(INSTRUMENTS).map(([k, i]) => [k, i.label]) })}
+        ${f('Simbol di broker', 'symbol', { type: 'text', ph: instOf(S).symbol })}
+        ${f(`Kontrak (${instOf(S).unit} per 1 lot)`, 'contract', { step: 'any', min: 0.0001 })}
+        ${f('Data backtest', 'dataSym', { opts: DATA_SYMBOLS.filter(d => d.inst === (S.inst || 'xau')).map(d => [d.sym, d.label]) })}
         ${f('Timeframe utama', 'primaryTf', { opts: TF_ORDER.map(k => [k, k]) })}
         ${f('Arah trading', 'direction', { n: 1, opts: [[0, 'BUY & SELL (Full Auto)'], [1, 'BUY saja'], [2, 'SELL saja']] })}
       </div>
-      <p class="ea-hint">Beberapa broker memakai akhiran (XAUUSDm, XAUUSD.). Kosongkan di EA untuk memakai simbol chart tempat EA dipasang.</p>
+      <p class="ea-hint">Beberapa broker memakai akhiran (${instOf(S).symbol}m, ${instOf(S).symbol}.). Ukuran kontrak berbeda antar broker, cek spesifikasi simbol di MT5. Kosongkan di EA untuk memakai simbol chart tempat EA dipasang.</p>
     </section>
     <section class="ea-card">
       <h3>Timeframe & bobot <small>dari NetCheck</small></h3>
@@ -178,7 +183,7 @@ export function eaPg(el) {
         ${f('Maks balik arah per jam', 'rev.maxFlipsHour', { step: 1, min: 0 })}
       </div>
       ${f('Pending kena = balik arah', 'rev.reverse', { type: 'check' })}
-      <p class="ea-hint">XAUUSD 2 digit: 1 pip = 10 points = 0,10 USD, jadi 3 pip = 0,30 USD. Geser minimal menjaga EA tidak membanjiri server broker dengan modifikasi order; di bawah 1 pip broker bisa menolak (Too many requests). Maks balik arah per jam: 0 = tanpa batas.</p>
+      <p class="ea-hint">${instOf(S).pipNote}, jadi ${S.rev.distPips} pip = ${num(S.rev.distPips * S.rev.pipPoints * instOf(S).pointUsd, 2)} USD. Bila broker memakai digit lain, ubah "1 pip = berapa points". Geser minimal menjaga EA tidak membanjiri server broker dengan modifikasi order; di bawah 1 pip broker bisa menolak (Too many requests). Maks balik arah per jam: 0 = tanpa batas.</p>
     </section>
     <section class="ea-card">
       <h3>Stop loss ikut harga</h3>
@@ -288,7 +293,7 @@ export function eaPg(el) {
       <div class="ea-grid2">
         ${f('Jumlah bar M1', 'bt.barsRev', { n: 1, opts: [[1000, '1.000 bar (±17 jam)'], [3000, '3.000 bar (±2 hari)'], [6000, '6.000 bar (±4 hari)']] })}
         ${f('Saldo awal (USD)', 'bt.balance', { step: 100, min: 100 })}
-        ${f('Spread (USD / oz)', 'bt.spread', { step: 0.01, min: 0 })}
+        ${f(`Spread (USD / ${instOf(S).unit})`, 'bt.spread', { step: 0.01, min: 0 })}
       </div>
       <p class="ea-hint">Data candle M1 ${esc(S.dataSym)} dipecah jadi tick buatan acak yang menyentuh high dan low tiap candle (data candle tidak menyimpan urutan harga di dalamnya; hasilnya sama setiap dijalankan). Spread dihitung di setiap masuk dan keluar. Mode ini sangat peka terhadap spread, slippage, dan jeda eksekusi broker, jadi anggap hasil ini gambaran kasar, bukan prediksi.</p>
       <button class="ea-btn" data-act="bt-trev" ${st.busy ? 'disabled' : ''}>${st.busy === 'bt' ? esc(st.msg || 'Memproses…') : 'Jalankan backtest'}</button>
@@ -314,7 +319,7 @@ export function eaPg(el) {
       <div class="ea-grid2">
         ${f('Jumlah bar uji', 'bt.bars', { n: 1, opts: [[500, '500 bar'], [1000, '1.000 bar'], [2000, '2.000 bar'], [3000, '3.000 bar']] })}
         ${f('Saldo awal (USD)', 'bt.balance', { step: 100, min: 100 })}
-        ${f('Spread (USD / oz)', 'bt.spread', { step: 0.05, min: 0 })}
+        ${f(`Spread (USD / ${instOf(S).unit})`, 'bt.spread', { step: 0.05, min: 0 })}
       </div>
       <p class="ea-hint">Memakai mesin NetCheck yang sama (${tfs.join(', ') || '—'}) pada data ${esc(S.dataSym)}.${skipped.length ? ` Timeframe ${skipped.join(', ')} lebih kecil dari timeframe utama, jadi tidak ikut backtest (tetap dipakai EA live).` : ''}</p>
       <button class="ea-btn" data-act="bt" ${st.busy ? 'disabled' : ''}>${st.busy === 'bt' ? esc(st.msg || 'Memproses…') : 'Jalankan backtest'}</button>
@@ -482,6 +487,11 @@ export function eaPg(el) {
       if (x.min !== '') v = Math.max(Number(x.min), v);
       if (x.max !== '') v = Math.min(Number(x.max), v);
     } else v = x.dataset.n ? Number(x.value) : x.value;
+    if (p === 'inst') {
+      applyInstrument(S, x.value); persist(S);
+      st.series = null; st.loaded = null; st.trevBars = null; st.bt = null; st.opt = null; st.live = null; st.ex5 = null; st.err = '';
+      return render();
+    }
     setP(S, p, v);
     if (p === 'primaryTf') S.tfs[v].on = true;
     if (p === 'name') S.name = fileBase(S);

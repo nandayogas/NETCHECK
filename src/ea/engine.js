@@ -3,18 +3,20 @@
 import { mergeConfig, TF_ORDER } from '../ndax/config.js';
 import { analyzeAll } from '../ndax/analyzer.js';
 import { REV_DEFAULTS } from './trev.js';
+import { INSTRUMENTS, instOf } from './instruments.js';
 
 export const TF_MS = { M1: 6e4, M5: 3e5, M15: 9e5, M30: 18e5, H1: 36e5, H4: 144e5, D1: 864e5 };
 const INTERVAL = { M1: '1m', M5: '5m', M15: '15m', M30: '30m', H1: '1h', H4: '4h', D1: '1d' };
-const CONTRACT = 100;                 // XAUUSD: 1 lot = 100 oz, jadi 1 USD gerak harga = 100 USD per lot
 const WARM = 300;
 
 // Sumber data: Binance publik. XAUUSDT (futures emas) dipakai sebagai proxy XAUUSD MT5.
 const SPOT = ['https://data-api.binance.vision', 'https://api.binance.com', 'https://api-gcp.binance.com'];
 const FUT = ['https://fapi.binance.com', 'https://fapi1.binance.com', 'https://fapi2.binance.com'];
 export const DATA_SYMBOLS = [
-  { sym: 'XAUUSDT', label: 'XAUUSDT (Binance Futures)', fut: true },
-  { sym: 'PAXGUSDT', label: 'PAXGUSDT (token emas, spot)', fut: false },
+  { sym: 'XAUUSDT', inst: 'xau', label: 'XAUUSDT (Binance Futures)', fut: true },
+  { sym: 'PAXGUSDT', inst: 'xau', label: 'PAXGUSDT (token emas, spot)', fut: false },
+  { sym: 'BTCUSDT', inst: 'btc', label: 'BTCUSDT (Binance Futures)', fut: true },
+  { sym: 'BTCUSDT-SPOT', api: 'BTCUSDT', inst: 'btc', label: 'BTCUSDT (Binance Spot)', fut: false },
 ];
 
 export function cfgFromCache() {
@@ -28,7 +30,7 @@ export function defaultsFromNetcheck(cfg = cfgFromCache()) {
   const primaryTf = cfg.primaryTf in tfs ? cfg.primaryTf : 'H1';
   tfs[primaryTf].on = true;
   return {
-    name: 'NetCheckXAU', symbol: 'XAUUSD', dataSym: 'XAUUSDT', primaryTf, tfs,
+    name: 'NetCheckXAU', inst: 'xau', contract: 100, symbol: 'XAUUSD', dataSym: 'XAUUSDT', primaryTf, tfs,
     direction: 0, magic: 26051901,
     threshold: cfg.signal.threshold, sensitivity: cfg.signal.sensitivity,
     lotMode: 'risk', lot: 0.01, riskPct: 1, maxLot: 1,
@@ -106,6 +108,8 @@ export const MODES = ['swing', 'scalp', 'fast', 'straddle', 'trev'];
 // Pastikan semua set mode ada. Dipanggil saat memuat pengaturan.
 export function ensureModes(s) {
   s.rev = { ...REV_DEFAULTS, ...(s.rev || {}) };   // pengaturan Trailing Reverse (berlaku lintas mode)
+  if (!INSTRUMENTS[s.inst]) s.inst = 'xau';
+  if (!(s.contract > 0)) s.contract = instOf(s).contract;
   if (s.bt && s.bt.barsRev == null) s.bt.barsRev = 3000;   // jumlah bar M1 untuk backtest Trailing Reverse
   if (s.useAnalysis == null) s.useAnalysis = true;   // false = tanpa analisa NdaxTrade (pasang BUY STOP + SELL STOP)
   if (!s.be) s.be = { on: true, start: 1, buffer: 2 };   // SL ke impas saat profit >= start x risiko, + buffer (points)
@@ -122,6 +126,23 @@ export function ensureModes(s) {
   if (s.addWhile == null) s.addWhile = false;
   if (s.follow == null) s.follow = true;
   if (!MODES.includes(s.mode)) s.mode = 'swing';
+  return s;
+}
+
+// Ganti instrumen (Emas / BTC): simbol, data, kontrak, spread backtest, slippage, nilai pip Trailing Reverse.
+// Batas spread (points) di semua set mode ikut diskalakan, karena 1 point BTC jauh lebih kecil dari spread BTC.
+export function applyInstrument(s, key) {
+  const to = INSTRUMENTS[key];
+  if (!to) return s;
+  ensureModes(s);
+  const k = to.spreadScale / instOf(s).spreadScale;
+  const isDefaultName = !s.name || Object.values(INSTRUMENTS).some(i => i.name === s.name);
+  s.inst = key; s.symbol = to.symbol; s.dataSym = to.dataSym; s.contract = to.contract; s.slippage = to.slippage;
+  if (isDefaultName) s.name = to.name;
+  s.bt.spread = to.spread;
+  s.rev = { ...s.rev, ...to.rev };
+  s.maxSpread = Math.round(s.maxSpread * k);
+  for (const m of Object.keys(s.modes)) if (s.modes[m].maxSpread != null) s.modes[m].maxSpread = Math.round(s.modes[m].maxSpread * k);
   return s;
 }
 
@@ -173,7 +194,7 @@ export async function fetchHistory(dataSym, tf, bars) {
   let out = [], end = null;
   while (out.length < bars) {
     const lim = Math.min(page, bars - out.length);
-    const rows = await getJson(hosts, `${base}?symbol=${dataSym}&interval=${INTERVAL[tf]}&limit=${lim}${end ? '&endTime=' + end : ''}`);
+    const rows = await getJson(hosts, `${base}?symbol=${meta.api || dataSym}&interval=${INTERVAL[tf]}&limit=${lim}${end ? '&endTime=' + end : ''}`);
     if (!rows.length) break;
     const part = rows.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5], ct: k[6] }));
     out = part.concat(out);
@@ -236,6 +257,7 @@ export async function precompute(s, loaded, cfg = cfgFromCache(), onProgress, is
 
 // Fase 2: simulasi trading di atas deret skor. Murah, jadi bisa dipakai untuk optimasi.
 export function simulate(series, s, from = 0, to = series.length) {
+  const CONTRACT = s.contract > 0 ? s.contract : 100;   // unit per 1 lot (emas 100 oz, BTC 1)
   const d = s.direction;
   let bal = s.bt.balance, peak = bal, maxDD = 0, lastEntry = -1e9;
   const open = [], trades = [], curve = [{ t: series[from]?.t, v: bal }];
