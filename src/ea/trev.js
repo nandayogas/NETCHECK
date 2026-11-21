@@ -32,29 +32,47 @@ const b = v => (v ? 'true' : 'false');
 const n = v => String(Number(v));
 const safeName = s => (String(s || 'NetCheckTrev').replace(/[^A-Za-z0-9_]/g, '') || 'NetCheckTrev').slice(0, 40);
 
+// Mode TRAILING STOP: mesin yang sama dengan Trailing Reverse, tetapi pending berlawanan tidak dipasang ulang.
+// Kena sekali = posisi, sisi lawan dibatalkan, lalu EA menunggu posisi tutup (SL / trailing) sebelum memasang lagi.
+export const isStop = s => !!s && s.mode === 'trailstop';
+
+// Pengaturan efektif untuk kedua mode. s.rev dipakai bersama; mode Trailing Stop memaksa reverse = false.
+export function revParams(s) {
+  const r = { ...REV_DEFAULTS, ...((s && s.rev) || {}) };
+  if (isStop(s)) r.reverse = false;
+  return r;
+}
+
 export function buildTrailRev(s) {
-  const r = { ...REV_DEFAULTS, ...(s.rev || {}) };
+  const r = revParams(s);
   const name = safeName(s.name);
+  const stop = isStop(s);
+  const title = stop ? 'TRAILING STOP (satu posisi, tanpa balik arah)' : 'TRAILING REVERSE (stop-and-reverse)';
+  const how = stop
+    ? `//| Cara kerja: BUY STOP + SELL STOP dipasang dekat harga. Yang kena jadi posisi, sisi lawan dibatalkan.
+//| SL posisi ikut harga setelah profit mencapai InpTrailStartPips. Posisi tutup (SL / trailing) -> pasang ulang.`
+    : `//| Cara kerja: BUY STOP + SELL STOP dipasang dekat harga. Yang kena jadi posisi,
+//| lalu pending berlawanan ikut harga di belakangnya. Pending kena = balik arah.
+//| SL posisi ikut harga setelah profit mencapai InpTrailStartPips.`;
+  const desc = stop ? 'Trailing Stop: BUY STOP / SELL STOP menempel harga, satu posisi, SL ikut harga' : 'Trailing Reverse: BUY STOP / SELL STOP menempel harga, balik arah saat kena';
   return `//+------------------------------------------------------------------+
 //| ${name}.mq5
-//| Dibuat oleh NETCHECK EA BUILDER · Mode: TRAILING REVERSE (stop-and-reverse)
+//| Dibuat oleh NETCHECK EA BUILDER · Mode: ${title}
 //| Instrumen: ${s.symbol} · MetaTrader 5 (kompatibel Winlator)
-//| Cara kerja: BUY STOP + SELL STOP dipasang dekat harga. Yang kena jadi posisi,
-//| lalu pending berlawanan ikut harga di belakangnya. Pending kena = balik arah.
-//| SL posisi ikut harga setelah profit mencapai InpTrailStartPips.
+${how}
 //| PERINGATAN: trading berisiko tinggi. Uji di akun demo / Strategy Tester dulu.
 //| Akun hedging: posisi lama ditutup EA saat posisi balik terbuka.
 //| Akun netting: volume pending balik = 2 x lot agar posisi benar-benar berbalik.
 //+------------------------------------------------------------------+
 #property copyright "NETCHECK"
 #property version   "1.00"
-#property description "Trailing Reverse: BUY STOP / SELL STOP menempel harga, balik arah saat kena"
+#property description "${desc}"
 #include <Trade/Trade.mqh>
 
 //--- Umum
 input string InpSymbol      = "";                 // Simbol (kosong = simbol chart)
 input long   InpMagic       = ${n(s.magic)};      // Magic number
-input string InpComment     = "NETCHECK-TREV";    // Komentar order
+input string InpComment     = "${stop ? 'NETCHECK-TSTOP' : 'NETCHECK-TREV'}";    // Komentar order
 input double InpLot         = ${n(s.lot)};        // Lot tetap
 input int    InpSlippage    = ${n(s.slippage)};   // Slippage (points)
 input int    InpMaxSpread   = ${n(s.maxSpread)};  // Spread maksimum (points), 0 = tanpa batas
@@ -176,7 +194,7 @@ void ShowStatus(const string state)
    datetime now = TimeCurrent();
    if(now == g_lastCmt) return;
    g_lastCmt = now;
-   Comment("NETCHECK Trailing Reverse | ", g_sym, "\\n",
+   Comment("NETCHECK ${stop ? 'Trailing Stop' : 'Trailing Reverse'} | ", g_sym, "\\n",
            "Status: ", state, "\\n",
            "Spread: ", (string)SymbolInfoInteger(g_sym, SYMBOL_SPREAD), " points (maks ", (string)InpMaxSpread, ")\\n",
            "Jarak pending: ", DoubleToString(CurDist(), g_digits), InpAtrOn ? " (ATR " + DoubleToString(g_atrVal, g_digits) + ")" : " (tetap)", " | 1 pip = ", DoubleToString(g_pip, g_digits), "\\n",
@@ -215,7 +233,7 @@ int OnInit()
    Print("Spread sekarang ", sp0, " points (batas InpMaxSpread ", InpMaxSpread, "), jarak pending ", DoubleToString(Pips(InpDistPips), g_digits),
          ", stops level ", SymbolInfoInteger(g_sym, SYMBOL_TRADE_STOPS_LEVEL), " points, lot min ", DoubleToString(SymbolInfoDouble(g_sym, SYMBOL_VOLUME_MIN), 4));
    if(InpMaxSpread > 0 && sp0 > InpMaxSpread) Print("PERINGATAN: spread sekarang lebih besar dari InpMaxSpread, EA tidak akan memasang order. Naikkan InpMaxSpread.");
-   Print("Trailing Reverse aktif di ", g_sym, " · 1 pip = ", DoubleToString(g_pip, g_digits), " · akun ", g_hedge ? "hedging" : "netting");
+   Print("${stop ? 'Trailing Stop' : 'Trailing Reverse'} aktif di ", g_sym, " · 1 pip = ", DoubleToString(g_pip, g_digits), " · akun ", g_hedge ? "hedging" : "netting");
    return INIT_SUCCEEDED;
 }
 
@@ -454,7 +472,7 @@ function microPath(k, seed) {
 }
 
 export function simulateTrev(bars, s) {
-  const r = { ...REV_DEFAULTS, ...(s.rev || {}) };
+  const r = revParams(s);
   const pip = r.pipPoints * instOf(s).pointUsd;   // 1 pip dalam USD
   const CONTRACT = s.contract > 0 ? s.contract : 100;   // unit per 1 lot
   const sp = s.bt.spread, lots = s.lot;
@@ -574,15 +592,17 @@ export function simulateTrev(bars, s) {
 // Mencoba kombinasi pengali ATR, jarak minimum, dan batas balik arah per jam. Dipilih di 70% data pertama (skor = untung% / (DD% + 5)),
 // lalu 3 terbaik diuji di 30% data terakhir yang tidak dipakai memilih. Jarak minimum diskalakan menurut instrumen (emas 3/6/9 pip, BTC 40/80/120 pip).
 export async function optimizeTrev(bars, s, onProgress) {
-  const r0 = { ...REV_DEFAULTS, ...(s.rev || {}) };
+  const r0 = revParams(s);
   const base = instOf(s).rev.distMinPips || 3;
   const cut = Math.floor(bars.length * 0.7);
   const trainBars = bars.slice(0, cut), testBars = bars.slice(cut);
   const minN = 20;
   const grid = [];
+  // Trailing Stop tidak punya balik arah, jadi batas balik arah per jam tidak mengubah hasil: cukup satu nilai.
+  const flipOpts = isStop(s) ? [0] : [8, 20];
   for (const m of [0.7, 1, 1.5, 2])
     for (const k of [1, 2, 3])
-      for (const fl of [8, 20])
+      for (const fl of flipOpts)
         grid.push({ atrOn: true, atrMult: m, distMinPips: base * k, distMaxPips: Math.max(r0.distMaxPips, base * k * 2), maxFlipsHour: fl });
   // Batas rugi harian dimatikan selama pencarian: kalau aktif, semua kombinasi buruk terpotong di angka yang sama dan tidak bisa dibedakan.
   const sim = (bb, params) => simulateTrev(bb, { ...s, rev: { ...r0, ...params, dailyLossPct: 0 } });
@@ -601,7 +621,7 @@ export async function optimizeTrev(bars, s, onProgress) {
 
 // ---------- Saran otomatis dari hasil backtest (aturan sederhana, bukan model AI) ----------
 export function adviceTrev(b, s) {
-  const r = { ...REV_DEFAULTS, ...(s.rev || {}) };
+  const r = revParams(s);
   const f = (v, d = 2) => Number(v).toFixed(d).replace('.', ',');
   const contract = s.contract > 0 ? s.contract : 100;
   const cost = s.bt.spread * s.lot * contract;
@@ -619,7 +639,7 @@ export function adviceTrev(b, s) {
   if (b.maxDD > 20) out.push({ tone: 'warn', text: `Drawdown ${f(b.maxDD, 1)}% besar. Turunkan lot atau kecilkan batas rugi harian.` });
   if (b.halted) out.push({ tone: 'warn', text: 'Batas rugi harian sempat tercapai dan EA berhenti di periode ini.' });
   if (r.maxFlipsHour > 0 && b.flipsPerHour >= r.maxFlipsHour * 0.8) out.push({ tone: 'info', text: `Balik arah rata-rata mendekati batas ${r.maxFlipsHour} per jam, jadi EA sering menganggur di sisa jam. Bandingkan dengan batas yang lebih longgar.` });
-  out.push({ tone: 'info', text: 'Tekan "Cari strategi terbaik" di bawah untuk mencoba kombinasi pengali ATR, jarak minimum, dan batas balik arah per jam.' });
+  out.push({ tone: 'info', text: isStop(s) ? 'Tekan "Cari strategi terbaik" di bawah untuk mencoba kombinasi pengali ATR dan jarak minimum.' : 'Tekan "Cari strategi terbaik" di bawah untuk mencoba kombinasi pengali ATR, jarak minimum, dan batas balik arah per jam.' });
   return out;
 }
 

@@ -72,7 +72,7 @@ const cmCalc = (cm, i) => {
 };
 
 export function buildMql5(s, cfg) {
-  if (s.mode === 'trev') return buildTrailRev(s);   // mode Trailing Reverse punya generator sendiri (tanpa analisa)
+  if (s.mode === 'trev' || s.mode === 'trailstop') return buildTrailRev(s);   // Trailing Reverse dan Trailing Stop punya generator sendiri (tanpa analisa)
   const M = cfg.methods;
   const customs = (cfg.customMethods || []).filter(cm => CUSTOM_TYPES[cm.type]);
   const name = safeName(s.name);

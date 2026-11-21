@@ -85,3 +85,13 @@ Tab Backtest mode Trailing Reverse punya dua tambahan:
 - **Saran dari hasil backtest:** analisis otomatis berbasis aturan sederhana (expectancy, rata-rata menang vs kalah, balik arah per jam, jarak pending dibanding spread, drawdown). Ini bukan model AI.
 - **Cari strategi terbaik:** grid search 24 kombinasi (pengali ATR, jarak minimum, batas balik arah per jam). Dipilih di 70% data pertama, 3 terbaik diuji di 30% data terakhir. Bila tidak ada kombinasi yang untung di data uji, aplikasi menyatakannya apa adanya. Tombol Terapkan menyalin kombinasi ke tab Risiko.
 
+
+## 12. Mode Trailing Stop (EA Builder > Strategi > Trailing Stop)
+Versi tanpa balik arah dari Trailing Reverse: satu posisi, tanpa pending berlawanan yang ikut mengejar harga.
+- **Awal:** sama seperti Trailing Reverse. EA memasang BUY STOP di atas dan SELL STOP di bawah harga (jarak tetap atau otomatis mengikuti ATR M1). Yang kena duluan jadi posisi, sisi lawan dibatalkan.
+- **Setelah posisi terbuka:** tidak ada pending berlawanan. SL awal dipasang, dan SL ikut harga setelah profit mencapai `Mulai ikut saat profit` dengan jarak `Jarak SL dari harga`, sama seperti Trailing Reverse.
+- **Tutup dan pasang ulang:** posisi tutup saat SL kena (atau ditutup manual / batas rugi harian). Setelah itu EA memasang lagi BUY STOP dan SELL STOP.
+- **Pengaturan:** memakai tab Risiko dan Backtest yang sama dengan Trailing Reverse (`s.rev`). Mode ini memaksa `reverse = false` di `revParams()` (`src/ea/trev.js`), jadi kotak "Pending kena = balik arah" dan "Maks balik arah per jam" disembunyikan. Mengubah jarak atau SL di salah satu mode juga mengubah mode lainnya.
+- **Magic number:** sama dengan Trailing Reverse. Jangan jalankan keduanya di satu akun dan simbol yang sama bersamaan, atau ubah magic number salah satunya.
+- **Kode:** generator MQL5 dan simulator memakai `buildTrailRev()` dan `simulateTrev()` yang sama dengan Trailing Reverse. Komentar order EA: `NETCHECK-TSTOP`.
+- **Backtest:** perkiraan kasar dari candle M1, sama seperti Trailing Reverse. Uji di MT5 Strategy Tester (Every tick based on real ticks) dan akun demo.

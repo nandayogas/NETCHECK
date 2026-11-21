@@ -101,9 +101,15 @@ export function trevPreset(s) {
   return pickMode(t);
 }
 
+// Preset Trailing Stop: mesin Trailing Reverse dengan balik arah dimatikan (satu posisi, SL ikut harga, lalu pasang ulang).
+// Pengaturan jarak dan SL ada di s.rev yang sama dengan Trailing Reverse; reverse dipaksa false oleh revParams() di trev.js.
+export function trailstopPreset(s) {
+  return trevPreset(s);
+}
+
 // Preset per mode selain swing (yang memakai pengaturan NetCheck).
-export const PRESETS = { scalp: scalpPreset, fast: fastPreset, straddle: straddlePreset, trev: trevPreset };
-export const MODES = ['swing', 'scalp', 'fast', 'straddle', 'trev'];
+export const PRESETS = { scalp: scalpPreset, fast: fastPreset, straddle: straddlePreset, trev: trevPreset, trailstop: trailstopPreset };
+export const MODES = ['swing', 'scalp', 'fast', 'straddle', 'trev', 'trailstop'];
 
 // Pastikan semua set mode ada. Dipanggil saat memuat pengaturan.
 export function ensureModes(s) {
