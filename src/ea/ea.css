@@ -79,3 +79,5 @@
 .ea-modes button.on{border-color:var(--ea-cy);color:var(--ea-cy);box-shadow:0 0 14px rgba(0,229,255,.25);background:rgba(0,229,255,.08)}
 .ea-modes button:focus-visible{outline:2px solid var(--ea-cy);outline-offset:2px}
 .ea-modes button:last-child:nth-child(odd){grid-column:1/-1}
+.ea-okb,.ea-info{margin-top:10px;font-size:12px;border-radius:12px;padding:9px 11px}
+.ea-okb{background:rgba(0,229,160,.1);color:#5fe3b0} .ea-info{background:rgba(0,229,255,.07);color:var(--ea-txt)}

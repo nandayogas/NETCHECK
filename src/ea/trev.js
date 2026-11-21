@@ -569,3 +569,57 @@ export function simulateTrev(bars, s) {
     flips: flipTotal, flipsPerHour: flipTotal / hours, avgDist: bars.length ? distSum / bars.length : dist0, halted: halt, endT: lastT,
   };
 }
+
+// ---------- "Cari strategi terbaik" (grid search + data uji terpisah) ----------
+// Mencoba kombinasi pengali ATR, jarak minimum, dan batas balik arah per jam. Dipilih di 70% data pertama (skor = untung% / (DD% + 5)),
+// lalu 3 terbaik diuji di 30% data terakhir yang tidak dipakai memilih. Jarak minimum diskalakan menurut instrumen (emas 3/6/9 pip, BTC 40/80/120 pip).
+export async function optimizeTrev(bars, s, onProgress) {
+  const r0 = { ...REV_DEFAULTS, ...(s.rev || {}) };
+  const base = instOf(s).rev.distMinPips || 3;
+  const cut = Math.floor(bars.length * 0.7);
+  const trainBars = bars.slice(0, cut), testBars = bars.slice(cut);
+  const minN = 20;
+  const grid = [];
+  for (const m of [0.7, 1, 1.5, 2])
+    for (const k of [1, 2, 3])
+      for (const fl of [8, 20])
+        grid.push({ atrOn: true, atrMult: m, distMinPips: base * k, distMaxPips: Math.max(r0.distMaxPips, base * k * 2), maxFlipsHour: fl });
+  // Batas rugi harian dimatikan selama pencarian: kalau aktif, semua kombinasi buruk terpotong di angka yang sama dan tidak bisa dibedakan.
+  const sim = (bb, params) => simulateTrev(bb, { ...s, rev: { ...r0, ...params, dailyLossPct: 0 } });
+  const rows = [];
+  for (let i = 0; i < grid.length; i++) {
+    if (onProgress) onProgress(`Mencoba kombinasi ${i + 1} dari ${grid.length}…`);
+    await new Promise(res => setTimeout(res, 0));
+    const tr = sim(trainBars, grid[i]);
+    rows.push({ params: grid[i], train: tr, score: tr.n >= minN ? tr.netPct / (tr.maxDD + 5) : -999 });
+  }
+  rows.sort((a, b) => b.score - a.score);
+  const top = rows.slice(0, 3).map(x => ({ ...x, test: sim(testBars, x.params) }));
+  const baseRow = { params: {}, train: sim(trainBars, {}), test: sim(testBars, {}) };
+  return { top, base: baseRow, cut, tried: grid.length, minN };
+}
+
+// ---------- Saran otomatis dari hasil backtest (aturan sederhana, bukan model AI) ----------
+export function adviceTrev(b, s) {
+  const r = { ...REV_DEFAULTS, ...(s.rev || {}) };
+  const f = (v, d = 2) => Number(v).toFixed(d).replace('.', ',');
+  const contract = s.contract > 0 ? s.contract : 100;
+  const cost = s.bt.spread * s.lot * contract;
+  if (!b || !b.n) return [{ tone: 'warn', text: 'Tidak ada trade pada periode ini. Perkecil jarak minimum atau cek data.' }];
+  const out = [];
+  if (b.net < 0) out.push({ tone: 'warn', text: `Rugi bersih ${f(-b.net)} USD (${f(b.netPct, 1)}%) di periode ini, expectancy ${f(b.expectancy)} per trade.` });
+  else out.push({ tone: 'ok', text: `Untung bersih ${f(b.net)} USD (${f(b.netPct, 1)}%) di periode ini. Periodenya pendek: uji lagi di periode lain dan di MT5 Strategy Tester.` });
+  if (b.avgLoss < 0 && -b.avgLoss > b.avgWin) out.push({ tone: 'warn', text: `Rata-rata kalah (${f(-b.avgLoss)}) lebih besar dari rata-rata menang (${f(b.avgWin)}), win rate ${f(b.winRate, 0)}%. Naikkan pengali ATR atau jarak minimum supaya pending tidak kena gerak kecil.` });
+  if (b.flipsPerHour > 20) out.push({ tone: 'warn', text: `Balik arah ${f(b.flipsPerHour, 0)} per jam. Di atas 20 biasanya pending terlalu rapat untuk kondisi ini. Coba pengali ATR 1 sampai 1,5, jarak minimum lebih besar, atau batas balik arah per jam lebih kecil.` });
+  if (s.bt.spread > 0) {
+    const ratio = b.avgDist / s.bt.spread;
+    if (ratio < 4) out.push({ tone: 'warn', text: `Jarak pending rata-rata hanya ${f(ratio, 1)}x spread. Usahakan minimal 4 sampai 5x spread (naikkan jarak minimum atau "minimal x spread").` });
+  }
+  if (cost > 0 && b.avgWin > 0 && b.avgWin < cost * 3) out.push({ tone: 'info', text: `Tiap trade menanggung spread sekitar ${f(cost)} USD, sedangkan rata-rata menang hanya ${f(b.avgWin)} USD, jadi biaya memakan sebagian besar hasilnya.` });
+  if (b.maxDD > 20) out.push({ tone: 'warn', text: `Drawdown ${f(b.maxDD, 1)}% besar. Turunkan lot atau kecilkan batas rugi harian.` });
+  if (b.halted) out.push({ tone: 'warn', text: 'Batas rugi harian sempat tercapai dan EA berhenti di periode ini.' });
+  if (r.maxFlipsHour > 0 && b.flipsPerHour >= r.maxFlipsHour * 0.8) out.push({ tone: 'info', text: `Balik arah rata-rata mendekati batas ${r.maxFlipsHour} per jam, jadi EA sering menganggur di sisa jam. Bandingkan dengan batas yang lebih longgar.` });
+  out.push({ tone: 'info', text: 'Tekan "Cari strategi terbaik" di bawah untuk mencoba kombinasi pengali ATR, jarak minimum, dan batas balik arah per jam.' });
+  return out;
+}
+

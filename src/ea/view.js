@@ -13,7 +13,7 @@ const MODE_GRID = { swing: 'Swing', scalp: 'scalping', fast: 'fast signal conser
 // Tanpa analisa = EA tidak menunggu sinyal NdaxTrade; ia memasang BUY STOP + SELL STOP (sama seperti straddle).
 const noAnalysis = S => S.mode === 'straddle' || S.useAnalysis === false;
 import { buildMql5, precheck, compileBat, fileBase } from './mql.js';
-import { simulateTrev } from './trev.js';
+import { simulateTrev, optimizeTrev, adviceTrev } from './trev.js';
 import './ea.css';
 
 const KEY = 'ea.settings.v1';
@@ -299,6 +299,7 @@ export function eaPg(el) {
     </div>`;
   const tabBacktestTrev = () => {
     const b = st.bt;
+    const o = st.opt && st.opt.kind === 'trev' ? st.opt : null;
     return `
     <section class="ea-card">
       <h3>Backtest Trailing Reverse <small>perkiraan kasar</small></h3>
@@ -317,7 +318,27 @@ export function eaPg(el) {
       ${stats(b)}
       <p class="ea-hint">Jarak pending rata-rata ${num(b.avgDist, 2)} USD. Balik arah rata-rata ${num(b.flipsPerHour, 1)} per jam${b.halted ? ' · berhenti karena batas rugi harian' : ''}. Setiap balik arah menanggung spread; kalau profit rata-rata per trade kecil dibanding spread, hasil live bisa jauh lebih buruk dari ini.</p>
       <div class="ea-tl"><div class="ea-sect">10 trade terakhir</div>${b.trades.slice(-10).reverse().map(t => `<div class="ea-tr"><span class="${t.dir > 0 ? 'buy' : 'sell'}">${t.dir > 0 ? 'BUY' : 'SELL'}</span><span>${fmtP(t.entry)} → ${fmtP(t.exit)} · ${esc(t.why)}</span><b class="${t.pnl >= 0 ? 'buy' : 'sell'}">${t.pnl >= 0 ? '+' : ''}${num(t.pnl)}</b></div>`).join('') || '<p class="ea-hint">Tidak ada trade pada periode ini.</p>'}</div>
-    </section>` : ''}`;
+    </section>
+    <section class="ea-card">
+      <h3>Saran dari hasil backtest <small>analisis otomatis</small></h3>
+      ${adviceTrev(b, S).map(a => `<div class="${a.tone === 'warn' ? 'ea-warn' : a.tone === 'ok' ? 'ea-okb' : 'ea-info'}">${esc(a.text)}</div>`).join('')}
+    </section>` : ''}
+    <section class="ea-card">
+      <h3>AI Strategy Generator <small>mode Trailing Reverse</small></h3>
+      <p class="ea-hint">Mencoba 24 kombinasi pengali ATR, jarak minimum, dan batas balik arah per jam. Dipilih di 70% data pertama, lalu 3 terbaik diuji di 30% data terakhir yang tidak dipakai memilih. Batas rugi harian dimatikan selama pencarian supaya perbedaan antar kombinasi kelihatan. Ini pencarian parameter lewat backtest, bukan model AI. Hasilnya hanya perkiraan kasar dan gampang terlalu cocok dengan periode yang sama (overfitting); ulangi di Strategy Tester MT5 dan periode lain sebelum dipakai.</p>
+      <button class="ea-btn" data-act="opt-trev" ${st.busy ? 'disabled' : ''}>${st.busy === 'opt' ? esc(st.msg || 'Mengoptimasi…') : 'Cari strategi terbaik'}</button>
+      ${o ? `<div class="ea-opt">
+        <div class="ea-oh"><b>Sekarang</b><span>pengaturan di tab Risiko</span></div>
+        <div class="ea-oc"><div><small>Latih</small><b class="${o.base.train.net >= 0 ? 'buy' : 'sell'}">${num(o.base.train.netPct, 1)}%</b><small>${o.base.train.n} trade · DD ${num(o.base.train.maxDD, 1)}%</small></div>
+        <div><small>Uji (data baru)</small><b class="${o.base.test.net >= 0 ? 'buy' : 'sell'}">${num(o.base.test.netPct, 1)}%</b><small>${o.base.test.n} trade · DD ${num(o.base.test.maxDD, 1)}%</small></div></div></div>
+      ${o.top.map((r, i) => `<div class="ea-opt">
+        <div class="ea-oh"><b>#${i + 1}</b><span>ATR x${r.params.atrMult} · min ${r.params.distMinPips} · maks ${r.params.distMaxPips} pip · balik ≤ ${r.params.maxFlipsHour}/jam</span><button class="ea-btn sm" data-applyrev="${i}">Terapkan</button></div>
+        <div class="ea-oc"><div><small>Latih</small><b class="${r.train.net >= 0 ? 'buy' : 'sell'}">${num(r.train.netPct, 1)}%</b><small>${r.train.n} trade · DD ${num(r.train.maxDD, 1)}%</small></div>
+        <div><small>Uji (data baru)</small><b class="${r.test.net >= 0 ? 'buy' : 'sell'}">${num(r.test.netPct, 1)}%</b><small>${r.test.n} trade · DD ${num(r.test.maxDD, 1)}%</small></div></div>
+        ${r.test.net < 0 ? '<div class="ea-warn">Rugi di data uji: kemungkinan overfitting.</div>' : ''}</div>`).join('')}
+      ${o.top.every(r => r.test.net <= 0) ? '<div class="ea-warn">Tidak ada kombinasi yang untung di data uji. Pada periode dan data ini strategi stop-and-reverse kemungkinan memang tidak punya keunggulan setelah spread; jangan memaksa memakai angka "terbaik" di atas.</div>' : ''}
+      <p class="ea-hint">Dicoba ${o.tried} kombinasi, minimal ${o.minN} trade di data latih.</p>` : ''}
+    </section>`;
   };
   const tabBacktest = () => {
     if (S.mode === 'trev') return tabBacktestTrev();
@@ -422,7 +443,7 @@ export function eaPg(el) {
     if (!alive()) return;
     st.busy = ''; st.msg = ''; render();
   };
-  const progress = m => { if (alive()) { st.msg = m; const b = root.querySelector('[data-act="bt"],[data-act="bt-trev"]'); if (b) b.textContent = m; } };
+  const progress = m => { if (alive()) { st.msg = m; const b = root.querySelector('[data-act="bt"],[data-act="bt-trev"],[data-act="opt-trev"]'); if (b) b.textContent = m; } };
 
   const ensureSeries = async () => {
     if (st.series) return st.series;
@@ -433,13 +454,20 @@ export function eaPg(el) {
   };
 
   root.addEventListener('click', async e => {
-    const t = e.target.closest('[data-tab],[data-act],[data-apply],[data-mode]');
+    const t = e.target.closest('[data-tab],[data-act],[data-apply],[data-applyrev],[data-mode]');
     if (!t) return;
     if (t.dataset.tab) { st.tab = t.dataset.tab; st.err = ''; return render(); }
     if (t.dataset.mode) {
       if (st.busy) return;
       switchMode(S, t.dataset.mode); persist(S);
       st.series = null; st.loaded = null; st.bt = null; st.opt = null; st.ex5 = null; st.err = '';
+      return render();
+    }
+    if (t.dataset.applyrev != null) {
+      const r = st.opt && st.opt.kind === 'trev' ? st.opt.top[+t.dataset.applyrev] : null;
+      if (!r) return;
+      Object.assign(S.rev, r.params); persist(S);
+      st.bt = st.trevBars ? simulateTrev(st.trevBars, S) : null;
       return render();
     }
     if (t.dataset.apply != null) {
@@ -457,6 +485,12 @@ export function eaPg(el) {
       const r = analyzeAll(data, ac);
       if (!r) throw new Error('Data belum cukup untuk dianalisis');
       st.live = r;
+    });
+    if (a === 'opt-trev') return run('opt', async () => {
+      if (!st.trevBars) { progress('Mengambil data M1…'); st.trevBars = await fetchHistory(S.dataSym, 'M1', S.bt.barsRev || 3000); }
+      if (st.trevBars.length < 500) throw new Error('Data M1 terlalu sedikit untuk optimasi');
+      st.bt = simulateTrev(st.trevBars, S);
+      st.opt = { kind: 'trev', ...(await optimizeTrev(st.trevBars, S, progress)) };
     });
     if (a === 'bt-trev') return run('bt', async () => {
       if (!st.trevBars) { progress('Mengambil data M1…'); st.trevBars = await fetchHistory(S.dataSym, 'M1', S.bt.barsRev || 3000); }

@@ -80,3 +80,8 @@ Di EA Builder > Strategi > Instrumen & platform ada pilihan **Emas (XAUUSD)** da
 ## 10. Jarak pending otomatis (ATR) di Trailing Reverse
 Jarak pending bisa mengikuti volatilitas: jarak = pengali x ATR (M1, periode 14), dijepit antara jarak minimum dan maksimum, lalu tidak kurang dari pengali x spread saat ini. Market liar membuat pending melebar sehingga flip palsu berkurang; market tenang membuatnya rapat. Pending yang sudah terpasang hanya bergeser mendekati harga, jarak baru berlaku untuk pending berikutnya. SL awal (minimal 2x jarak pending) dan SL ikut harga (minimal sama dengan jarak pending) menyesuaikan otomatis. Dimatikan lewat `Jarak pending mengikuti ATR M1` (EA kembali memakai jarak tetap).
 
+## 11. Saran dan "Cari strategi terbaik" di Trailing Reverse
+Tab Backtest mode Trailing Reverse punya dua tambahan:
+- **Saran dari hasil backtest:** analisis otomatis berbasis aturan sederhana (expectancy, rata-rata menang vs kalah, balik arah per jam, jarak pending dibanding spread, drawdown). Ini bukan model AI.
+- **Cari strategi terbaik:** grid search 24 kombinasi (pengali ATR, jarak minimum, batas balik arah per jam). Dipilih di 70% data pertama, 3 terbaik diuji di 30% data terakhir. Bila tidak ada kombinasi yang untung di data uji, aplikasi menyatakannya apa adanya. Tombol Terapkan menyalin kombinasi ke tab Risiko.
+
