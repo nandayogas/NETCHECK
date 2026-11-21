@@ -283,6 +283,18 @@ export function simulate(series, s, from = 0, to = series.length) {
       else { if (b.h + spread >= p.sl) hit = [p.sl, 'SL']; else if (b.l + spread <= p.tp) hit = [p.tp, 'TP']; }
       if (hit) { close(p, hit[0], b.t, hit[1]); open.splice(k, 1); }
     }
+    // 1b) break-even seperti ManageBreakEven() di EA: SL pindah ke entri +/- buffer setelah profit >= start x risiko awal.
+    // Pemicu memakai high/low bar (EA memeriksa tiap tick), perubahan SL berlaku mulai bar berikutnya.
+    if (s.be && s.be.on) {
+      const bufP = (s.be.buffer || 0) * instOf(s).pointUsd;
+      for (const p of open) {
+        if (p.dir > 0) {
+          if (b.h - p.entry >= s.be.start * p.risk) { const nsl = p.entry + bufP; if (nsl > p.sl) p.sl = nsl; }
+        } else if (p.entry - (b.l + spread) >= s.be.start * p.risk) {
+          const nsl = p.entry - bufP; if (nsl < p.sl) p.sl = nsl;
+        }
+      }
+    }
     // 2) trailing berdasarkan penutupan bar
     if (s.trail.on && b.atr) {
       for (const p of open) {
@@ -305,7 +317,7 @@ export function simulate(series, s, from = 0, to = series.length) {
           let lots = s.lot;
           if (s.lotMode === 'risk') lots = Math.floor((bal * s.riskPct / 100) / (risk * CONTRACT) * 100) / 100;
           lots = Math.max(0.01, Math.min(s.maxLot, lots));
-          open.push({ dir: sig, entry, sl: entry - sig * risk, tp: entry + sig * risk * s.rr, lots, t0: b.t });
+          open.push({ dir: sig, entry, sl: entry - sig * risk, tp: entry + sig * risk * s.rr, lots, t0: b.t, risk });
           lastEntry = i;
         }
       }
